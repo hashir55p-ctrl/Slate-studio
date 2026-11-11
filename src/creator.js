@@ -691,4 +691,4 @@ function crPanel(){
 const CR_JESVIN={name:'Jesvin',height:1.74,build:.92,shoulders:1,head:1.04,skin:'#94654a',hair:'curly',hairColor:'#18120e',brow:'#140e0b',eyes:'#2b1b12',beard:'full',glasses:'round',top:'hoodie',shirt:'#4d4a2c',pants:'#4a6188',fit:1.28,shoes:'#ebe7de',shoeStyle:'sneaker',shoeAccent:'#4f5f3d',backpack:'yes',bagColor:'#5f7247'};
 function loadJesvinRig(){ const sp=crAddNode(CR_JESVIN); toast('Jesvin added with a full body, finger and face rig. Pose him in Rig and pose, or Face and hands.'); return sp; }
 window.__cr={add:crAddNode,rebuild:crRebuild,def:CR_DEF};
-window.__cr.frame=function(nm,d){ nodes.forEach(n=>{ if(n.userData.name===nm){ const p=n.position; orbit.target.set(p.x,p.y+.95,p.z); edit.position.set(p.x+.4*d,p.y+1.1,p.z+d); orbit.update(); } }); };
+window.__cr.frame=function(nm,d,hh){ hh=hh||.95; nodes.forEach(n=>{ if(n.userData.name===nm){ const p=n.position; orbit.target.set(p.x,p.y+hh,p.z); edit.position.set(p.x+.25*d,p.y+hh+.12,p.z+d); orbit.update(); } }); };
