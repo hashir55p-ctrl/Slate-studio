@@ -78,21 +78,6 @@ function adoptNode(spec,obj){
   scene.add(obj); nodes.set(spec.id,obj); order.push(spec.id); return obj;
 }
 function openGlb(){ showTab('ai'); toast('Tap the Import GLB model button in this tab.'); }
-function importGlb(file){
-  if(!THREE.GLTFLoader){ toast('The model loader did not load. Reload the page.'); return; }
-  if(file.size>60*1048576){ toast('That file is over 60 MB. Try a smaller model.'); return; }
-  if(!/\.glb$/i.test(file.name||'')){ toast('Choose a .glb file. Other model formats are not supported yet.'); return; }
-  const fr=new FileReader();
-  fr.onerror=()=>toast('Could not read that file.');
-  fr.onload=()=>{
-    const buf=fr.result, magic=new Uint8Array(buf.slice(0,4));
-    if(String.fromCharCode(magic[0],magic[1],magic[2],magic[3])!=='glTF'){ toast('That file is not a valid GLB model.'); return; }
-    toast('Loading '+file.name+'...');
-    try{ new THREE.GLTFLoader().parse(buf,'',gltf=>{ try{ adoptGlb(gltf,file.name); }catch(e){ toast('Could not add the model: '+((e&&e.message)||'error')); } },e=>toast('This model could not be loaded: '+((e&&e.message)||'it may use compression'))); }
-    catch(err){ toast('This model could not be loaded: '+((err&&err.message)||'error')); }
-  };
-  fr.readAsArrayBuffer(file);
-}
 function adoptGlb(gltf,fname,o){
   o=o||{};
   const model=gltf.scene, box=new THREE.Box3().setFromObject(model), size=box.getSize(new THREE.Vector3()), c=box.getCenter(new THREE.Vector3());
@@ -107,7 +92,7 @@ function adoptGlb(gltf,fname,o){
   if(o.quiet) return;
   selectId(sp.id); renderTimeline(); toast(msg);
 }
-$('#glbIn').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; if(f) importGlb(f); });
+$('#glbIn').addEventListener('change',e=>{ const fs=Array.from(e.target.files||[]); if(fs.length) importModelFiles(fs); });
 
 /* ---------- Claude assistant ---------- */
 const r2=v=>Math.round(v*100)/100;
@@ -320,7 +305,7 @@ function buildAiPane(){
   const tier=document.createElement('select'); tier.className='sel2'; tier.id='aiTier'; tier.setAttribute('aria-label','Mode');
   tier.innerHTML='<option value="default">Detailed (slower, better models)</option><option value="quick">Fast (simple edits)</option>';
   const log=document.createElement('div'); log.className='log'; log.id='aiLog'; log.setAttribute('aria-live','polite'); log.textContent='Claude can add models, move objects, keyframe the camera and change the lighting. You approve access the first time.';
-  const imp=filePick('Import GLB model...','',false,fs=>importGlb(fs[0]));
+  const imp=filePick('Import model (GLB or OBJ)...','.glb,.obj,.mtl',true,fs=>importModelFiles(fs));
   const js=document.createElement('textarea'); js.className='ta'; js.id='aiJson'; js.placeholder='Paste model JSON here'; js.setAttribute('aria-label','Model JSON');
   const add=document.createElement('button'); add.type='button'; add.className='pbtn'; add.textContent='Add JSON model';
   add.addEventListener('click',()=>{

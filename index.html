@@ -244,9 +244,9 @@ details.pnl[open]>summary::before{border:4px solid transparent;border-top:6px so
       </div>
     </aside>
   </div>
-  <footer class="b-stat"><span id="stL">Build 146. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
+  <footer class="b-stat"><span id="stL">Build 147. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
 </div>
-<input type="file" id="glbIn" hidden>
+<input type="file" id="glbIn" accept=".glb,.obj,.mtl" multiple hidden>
 <div id="popup" class="popup" hidden></div>
 <div id="toast" class="toast" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
@@ -3264,21 +3264,6 @@ function adoptNode(spec,obj){
   scene.add(obj); nodes.set(spec.id,obj); order.push(spec.id); return obj;
 }
 function openGlb(){ showTab('ai'); toast('Tap the Import GLB model button in this tab.'); }
-function importGlb(file){
-  if(!THREE.GLTFLoader){ toast('The model loader did not load. Reload the page.'); return; }
-  if(file.size>60*1048576){ toast('That file is over 60 MB. Try a smaller model.'); return; }
-  if(!/\.glb$/i.test(file.name||'')){ toast('Choose a .glb file. Other model formats are not supported yet.'); return; }
-  const fr=new FileReader();
-  fr.onerror=()=>toast('Could not read that file.');
-  fr.onload=()=>{
-    const buf=fr.result, magic=new Uint8Array(buf.slice(0,4));
-    if(String.fromCharCode(magic[0],magic[1],magic[2],magic[3])!=='glTF'){ toast('That file is not a valid GLB model.'); return; }
-    toast('Loading '+file.name+'...');
-    try{ new THREE.GLTFLoader().parse(buf,'',gltf=>{ try{ adoptGlb(gltf,file.name); }catch(e){ toast('Could not add the model: '+((e&&e.message)||'error')); } },e=>toast('This model could not be loaded: '+((e&&e.message)||'it may use compression'))); }
-    catch(err){ toast('This model could not be loaded: '+((err&&err.message)||'error')); }
-  };
-  fr.readAsArrayBuffer(file);
-}
 function adoptGlb(gltf,fname,o){
   o=o||{};
   const model=gltf.scene, box=new THREE.Box3().setFromObject(model), size=box.getSize(new THREE.Vector3()), c=box.getCenter(new THREE.Vector3());
@@ -3293,7 +3278,7 @@ function adoptGlb(gltf,fname,o){
   if(o.quiet) return;
   selectId(sp.id); renderTimeline(); toast(msg);
 }
-$('#glbIn').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; if(f) importGlb(f); });
+$('#glbIn').addEventListener('change',e=>{ const fs=Array.from(e.target.files||[]); if(fs.length) importModelFiles(fs); });
 
 /* ---------- Claude assistant ---------- */
 const r2=v=>Math.round(v*100)/100;
@@ -3506,7 +3491,7 @@ function buildAiPane(){
   const tier=document.createElement('select'); tier.className='sel2'; tier.id='aiTier'; tier.setAttribute('aria-label','Mode');
   tier.innerHTML='<option value="default">Detailed (slower, better models)</option><option value="quick">Fast (simple edits)</option>';
   const log=document.createElement('div'); log.className='log'; log.id='aiLog'; log.setAttribute('aria-live','polite'); log.textContent='Claude can add models, move objects, keyframe the camera and change the lighting. You approve access the first time.';
-  const imp=filePick('Import GLB model...','',false,fs=>importGlb(fs[0]));
+  const imp=filePick('Import model (GLB or OBJ)...','.glb,.obj,.mtl',true,fs=>importModelFiles(fs));
   const js=document.createElement('textarea'); js.className='ta'; js.id='aiJson'; js.placeholder='Paste model JSON here'; js.setAttribute('aria-label','Model JSON');
   const add=document.createElement('button'); add.type='button'; add.className='pbtn'; add.textContent='Add JSON model';
   add.addEventListener('click',()=>{
@@ -5486,24 +5471,44 @@ function chBuild(node){
   return node.userData.chains.length;
 }
 function chBuildAll(){ nodes.forEach(n=>{ if(n.userData.rig&&!n.userData.chBuilt){ let sk=0; n.traverse(o=>{ if(o.isSkinnedMesh) sk++; }); if(sk){ n.userData.chBuilt=1; try{ chBuild(n); }catch(e){ console.warn('chBuild',e); } } } }); }
+/* keyframes: spec.chk = [{t,wind,dir,stiff,damp,grav}] on the character; between keys the values blend linearly */
+function chSettings(n){ const K=n.userData.spec&&n.userData.spec.chk; if(!K||!K.length||CH.follow===false) return CH; const t=S.t, a=K.slice().sort((x,y)=>x.t-y.t);
+  const mix=(u,v,f)=>u+(v-u)*f; let k0=a[0], k1=a[a.length-1], f=0; if(t<=a[0].t){ k1=a[0]; } else if(t>=a[a.length-1].t){ k0=a[a.length-1]; } else { for(let i=0;i<a.length-1;i++){ if(t>=a[i].t&&t<=a[i+1].t){ k0=a[i]; k1=a[i+1]; f=(t-k0.t)/Math.max(1e-6,k1.t-k0.t); break; } } }
+  let dd=((k1.dir-k0.dir+540)%360)-180; return {on:CH.on,wind:mix(k0.wind,k1.wind,f),dir:k0.dir+dd*f,stiff:mix(k0.stiff,k1.stiff,f),damp:mix(k0.damp,k1.damp,f),grav:mix(k0.grav,k1.grav,f),gust:CH.gust}; }
+function chKeyHere(){ const n=rigNode(); if(!n||!n.userData.chains||!n.userData.chains.length){ toast('Select a rigged character that has hair or cloth chains.'); return; }
+  const sp=n.userData.spec, K=sp.chk||(sp.chk=[]), t=+S.t.toFixed(2), e={t:t,wind:CH.wind,dir:CH.dir,stiff:CH.stiff,damp:CH.damp,grav:CH.grav}; const i=K.findIndex(q=>Math.abs(q.t-t)<.05); if(i>=0) K[i]=e; else K.push(e);
+  K.sort((x,y)=>x.t-y.t); queueSave(); toast('Hair and cloth keyed at '+t.toFixed(2)+' s ('+K.length+' key'+(K.length>1?'s':'')+').'); }
+function chClearKeys(){ const n=rigNode(); if(!n) return; delete n.userData.spec.chk; queueSave(); toast('Hair and cloth keys cleared.'); }
+function chColliders(n){ const R=n.userData.rig; if(!R||!R.bones) return []; const B=R.bones, H=(R.H||1.75)*n.getWorldScale(new THREE.Vector3()).y, out=[];
+  const wp=nm=>B[nm]?B[nm].getWorldPosition(new THREE.Vector3()):null;
+  const seg=(a,b,r,tag)=>{ const A=wp(a), Bq=wp(b); if(A&&Bq) out.push({A:A,B:Bq,r:r*H,tag:tag}); };
+  seg('hips','spine',.058,'torso'); seg('spine','chest',.056,'torso'); seg('chest','neck',.054,'torso'); seg('neck','head',.032,'neck');
+  if(B.head){ const hp=B.head.getWorldPosition(new THREE.Vector3()), hq=B.head.getWorldQuaternion(new THREE.Quaternion()), up=new THREE.Vector3(0,1,0).applyQuaternion(hq).multiplyScalar(.055*H), c=hp.add(up); out.push({A:c,B:c.clone(),r:.058*H,tag:'head'}); }
+  ['L','R'].forEach(sd=>{ seg('upperArm.'+sd,'foreArm.'+sd,.03,'arm'); seg('foreArm.'+sd,'hand.'+sd,.026,'arm'); seg('upperLeg.'+sd,'lowerLeg.'+sd,.048,'leg'); seg('lowerLeg.'+sd,'foot.'+sd,.036,'leg'); });
+  return out; }
+const _chC=new THREE.Vector3(), _chD=new THREE.Vector3();
+function chCollide(P,N,cols,skip){ for(let k=2;k<=N;k++) for(let c=0;c<cols.length;c++){ const o=cols[c]; if(skip.indexOf(o.tag)>=0) continue;
+    _chD.subVectors(o.B,o.A); const l2=_chD.lengthSq(); let u=l2>1e-9?_chC.subVectors(P[k],o.A).dot(_chD)/l2:0; u=u<0?0:u>1?1:u; _chC.copy(o.A).addScaledVector(_chD,u);
+    _chD.subVectors(P[k],_chC); const d=_chD.length(); if(d<o.r){ if(d<1e-6) _chD.set(0,0,-1); else _chD.multiplyScalar(1/d); P[k].copy(_chC).addScaledVector(_chD,o.r); } } }
 const _chV=new THREE.Vector3(), _chQ=new THREE.Quaternion(), _chQi=new THREE.Quaternion();
 function chStep(dt){
   if(!CH.on) return; dt=Math.max(1/120,Math.min(1/20,dt||1/60)); const f=dt*60, tm=performance.now()/1000;
-  nodes.forEach(n=>{ const C=n.userData.chains; if(!C||!C.length) return;
+  nodes.forEach(n=>{ const C=n.userData.chains; if(!C||!C.length) return; const SET=chSettings(n), COL=CH.collide===false?[]:chColliders(n);
     C.forEach(c=>{ const par=c.parent; par.updateWorldMatrix(true,false); const N=c.N, T=c.restLocal.map(p=>par.localToWorld(p.clone()));
       if(!c.P||c.P[0].distanceTo(T[0])>.6){ c.P=T.map(p=>p.clone()); c.Pp=T.map(p=>p.clone()); }
-      const P=c.P, Pp=c.Pp, damp=Math.pow(CH.damp,f), st=1-Math.pow(1-CH.stiff,f), wd=CH.dir*Math.PI/180;
+      const P=c.P, Pp=c.Pp, damp=Math.pow(SET.damp,f), st=1-Math.pow(1-SET.stiff,f), wd=SET.dir*Math.PI/180;
       P[0].copy(T[0]); Pp[0].copy(T[0]);
-      for(let k=1;k<=N;k++){ const gust=1+CH.gust*(Math.sin(tm*1.7+k*.6)+Math.sin(tm*2.9+k))*.5, ax=Math.sin(wd)*CH.wind*3.5*gust, az=Math.cos(wd)*CH.wind*3.5*gust, ay=-9.8*CH.grav;
+      for(let k=1;k<=N;k++){ const gust=1+CH.gust*(Math.sin(tm*1.7+k*.6)+Math.sin(tm*2.9+k))*.5, ax=Math.sin(wd)*SET.wind*3.5*gust, az=Math.cos(wd)*SET.wind*3.5*gust, ay=-9.8*SET.grav;
         const vx=(P[k].x-Pp[k].x)*damp, vy=(P[k].y-Pp[k].y)*damp, vz=(P[k].z-Pp[k].z)*damp; Pp[k].copy(P[k]);
         P[k].x+=vx+ax*dt*dt; P[k].y+=vy+ay*dt*dt; P[k].z+=vz+az*dt*dt;
         P[k].x+=(T[k].x-P[k].x)*st; P[k].y+=(T[k].y-P[k].y)*st; P[k].z+=(T[k].z-P[k].z)*st; }
       for(let it=0;it<3;it++) for(let k=1;k<=N;k++){ _chV.subVectors(P[k],P[k-1]); const l=_chV.length()||1e-6; P[k].copy(P[k-1]).addScaledVector(_chV,c.L[k]/l); }
+      if(COL.length){ const skip=par===n.userData.rig.bones.head?['head','neck']:par===n.userData.rig.bones.hips?[]:[]; chCollide(P,N,COL,skip); for(let k=1;k<=N;k++){ _chV.subVectors(P[k],P[k-1]); const l=_chV.length()||1e-6; P[k].copy(P[k-1]).addScaledVector(_chV,c.L[k]/l); } }
       par.getWorldQuaternion(_chQ);
       for(let i=0;i<N;i++){ _chV.subVectors(P[i+1],P[i]).normalize(); _chQi.copy(_chQ).invert(); _chV.applyQuaternion(_chQi); const q=new THREE.Quaternion().setFromUnitVectors(c.r[i],_chV); c.bones[i].quaternion.copy(q); _chQ.multiply(q); }
     }); });
 }
-window.chStep=chStep; window.chBuildAll=chBuildAll; window.CH=CH;
+window.chStep=chStep; window.chKeyHere=chKeyHere; window.chColliders=chColliders; window.chCollide=chCollide; window.chSettings=chSettings; window.chBuildAll=chBuildAll; window.CH=CH;
 /* Rig tab controls */
 (function(){ const _b=buildRigPane; buildRigPane=function(){ _b(); try{
   const host=document.getElementById('pRig'); if(!host) return;
@@ -5511,9 +5516,92 @@ window.chStep=chStep; window.chBuildAll=chBuildAll; window.CH=CH;
   const sl=(label,min,max,step,key,fmt)=>rangeField(label,min,max,step,()=>CH[key],v=>{ CH[key]=v; },fmt||(v=>(+v).toFixed(2)));
   const tg=scBtn(CH.on?'Hair and cloth physics: on':'Hair and cloth physics: off',()=>{ CH.on=!CH.on; tg.textContent=CH.on?'Hair and cloth physics: on':'Hair and cloth physics: off'; },'hi');
   host.append(panel('Hair and cloth',[st,tg,sl('Spring (stiffness)',.02,.6,.01,'stiff'),sl('Swing (less = floppier)',.8,.99,.01,'damp'),sl('Wind strength',0,14,.1,'wind',v=>(+v).toFixed(1)),sl('Wind direction',-180,180,1,'dir',v=>Math.round(v)+'°'),sl('Gravity',0,1.5,.05,'grav')]));
+  const ck=scBtn('Collide with body: '+(CH.collide===false?'off':'on'),()=>{ CH.collide=CH.collide===false; ck.textContent='Collide with body: '+(CH.collide===false?'off':'on'); });
+  const kb=scBtn('Key hair and cloth at playhead',chKeyHere,'hi'), kc=scBtn('Clear hair and cloth keys',chClearKeys), kf=scBtn('Follow keys: on',()=>{ CH.follow=CH.follow===false; kf.textContent='Follow keys: '+(CH.follow===false?'off':'on'); });
+  host.lastChild.append(ck,kb,kf,kc);
   const note=document.createElement('p'); note.className='note'; host.lastChild.appendChild(note);
-  setInterval(()=>{ try{ const n=rigNode(); const c=n&&n.userData.chains; note.textContent=c&&c.length?('Chains found: '+c.map(x=>x.name).join(', ')):'No hair or cloth chains on this model.'; }catch(e){} },800);
+  setInterval(()=>{ try{ const n=rigNode(); const c=n&&n.userData.chains; const kk=n&&n.userData.spec&&n.userData.spec.chk; note.textContent=(c&&c.length?('Chains found: '+c.map(x=>x.name).join(', ')):'No hair or cloth chains on this model.')+(kk&&kk.length?' Keys at: '+kk.map(q=>q.t.toFixed(1)+'s').join(', ')+'.':' No keys yet.'); }catch(e){} },800);
  }catch(e){ console.warn('chain ui',e); } }; })();
+/* ================= Import models: GLB or OBJ (+MTL), saved with the project (Build 146) =================
+   OBJ files are converted to GLB in memory (objects/groups become named meshes, so hair_* and cape parts keep
+   their names; per-vertex colours are kept). The model bytes are stored in IndexedDB and restored on reload. */
+function impObjToGlb(text,mtlText){
+  const mats={}; if(mtlText){ let cur=null; mtlText.split(/\r?\n/).forEach(l=>{ const t=l.trim().split(/\s+/); if(t[0]==='newmtl'){ cur=t.slice(1).join(' '); mats[cur]={c:[.8,.8,.8]}; } else if(t[0]==='Kd'&&cur&&t.length>=4) mats[cur].c=[+t[1],+t[2],+t[3]]; }); }
+  const V=[],C=[],VN=[]; let hasC=false; const objs=[]; let cur=null, pend='mesh', pmat='', nameCount={};
+  const mk=()=>{ const base=pend; nameCount[base]=(nameCount[base]||0)+1; cur={name:nameCount[base]>1?base+'_'+nameCount[base]:base,map:new Map(),pos:[],nor:[],col:[],idx:[],mat:pmat,hasN:true}; objs.push(cur); return cur; };
+  const lines=text.split(/\r?\n/);
+  for(let li=0;li<lines.length;li++){ const l=lines[li]; if(!l||l[0]==='#') continue; const t=l.trim().split(/\s+/), c=t[0];
+    if(c==='v'){ V.push([+t[1],+t[2],+t[3]]); if(t.length>=7){ C.push([+t[4],+t[5],+t[6]]); hasC=true; } else C.push(null); }
+    else if(c==='vn') VN.push([+t[1],+t[2],+t[3]]);
+    else if(c==='o'||c==='g'){ pend=(t.slice(1).join('_')||'mesh').replace(/[^A-Za-z0-9_.\-]/g,'_'); cur=null; }
+    else if(c==='usemtl'){ const m=t.slice(1).join(' '); if(cur&&cur.idx.length&&cur.mat!==m){ cur=null; } pmat=m; if(cur) cur.mat=m; }
+    else if(c==='f'){ if(!cur) mk(); const ids=[];
+      for(let k=1;k<t.length;k++){ const p=t[k].split('/'); let vi=parseInt(p[0],10), ni=p.length>2&&p[2]!==''?parseInt(p[2],10):0; vi=vi<0?V.length+vi:vi-1; if(ni) ni=ni<0?VN.length+ni:ni-1;
+        const key=vi+'/'+ni; let id=cur.map.get(key);
+        if(id===undefined){ id=cur.pos.length/3; cur.map.set(key,id); const v=V[vi]; if(!v) continue; cur.pos.push(v[0],v[1],v[2]);
+          if(ni&&VN[ni]){ cur.nor.push(VN[ni][0],VN[ni][1],VN[ni][2]); } else { cur.nor.push(0,0,0); cur.hasN=false; }
+          const cc=C[vi]; cur.col.push(cc?cc[0]:1,cc?cc[1]:1,cc?cc[2]:1); }
+        ids.push(id); }
+      for(let k=1;k<ids.length-1;k++) cur.idx.push(ids[0],ids[k],ids[k+1]); } }
+  const O=objs.filter(o=>o.idx.length);
+  if(!O.length) throw new Error('No faces found in that OBJ.');
+  O.forEach(o=>{ if(!o.hasN){ const P=o.pos, N=new Float32Array(P.length), I=o.idx;
+      for(let i=0;i<I.length;i+=3){ const a=I[i]*3,b=I[i+1]*3,c2=I[i+2]*3, ux=P[b]-P[a],uy=P[b+1]-P[a+1],uz=P[b+2]-P[a+2], vx=P[c2]-P[a],vy=P[c2+1]-P[a+1],vz=P[c2+2]-P[a+2], nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+        [a,b,c2].forEach(q=>{ N[q]+=nx; N[q+1]+=ny; N[q+2]+=nz; }); }
+      for(let i=0;i<N.length;i+=3){ const l=Math.hypot(N[i],N[i+1],N[i+2])||1; N[i]/=l; N[i+1]/=l; N[i+2]/=l; } o.nor=Array.from(N); } });
+  const bin=[], views=[], acc=[], meshes=[], nodesJ=[], matList=[], matIdx={};
+  const add=(arr,target)=>{ let off=0; bin.forEach(b=>off+=b.byteLength); const pad=(4-off%4)%4; if(pad){ bin.push(new Uint8Array(pad)); off+=pad; } bin.push(new Uint8Array(arr.buffer,arr.byteOffset,arr.byteLength)); views.push({buffer:0,byteOffset:off,byteLength:arr.byteLength,target:target}); return views.length-1; };
+  O.forEach(o=>{ const P=new Float32Array(o.pos), N=new Float32Array(o.nor), I=new Uint32Array(o.idx); let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9];
+    for(let i=0;i<P.length;i+=3) for(let k=0;k<3;k++){ if(P[i+k]<mn[k])mn[k]=P[i+k]; if(P[i+k]>mx[k])mx[k]=P[i+k]; }
+    const a0=acc.length, vp=add(P,34962), vn=add(N,34962), vi=add(I,34963);
+    acc.push({bufferView:vp,componentType:5126,count:P.length/3,type:'VEC3',min:mn,max:mx},{bufferView:vn,componentType:5126,count:N.length/3,type:'VEC3'},{bufferView:vi,componentType:5125,count:I.length,type:'SCALAR'});
+    const at={POSITION:a0,NORMAL:a0+1}; if(hasC){ const cb=add(new Float32Array(o.col),34962); acc.push({bufferView:cb,componentType:5126,count:o.col.length/3,type:'VEC3'}); at.COLOR_0=acc.length-1; }
+    const mk2=o.mat||'__default'; if(matIdx[mk2]===undefined){ matIdx[mk2]=matList.length; const col=hasC?[1,1,1]:((mats[o.mat]||{c:[.8,.78,.74]}).c); matList.push({name:mk2,pbrMetallicRoughness:{baseColorFactor:[col[0],col[1],col[2],1],metallicFactor:0,roughnessFactor:.7},doubleSided:true}); }
+    meshes.push({name:o.name,primitives:[{attributes:at,indices:a0+2,material:matIdx[mk2]}]}); nodesJ.push({name:o.name,mesh:meshes.length-1}); });
+  let tot=0; bin.forEach(b=>tot+=b.byteLength); const padEnd=(4-tot%4)%4; if(padEnd){ bin.push(new Uint8Array(padEnd)); tot+=padEnd; }
+  const g={asset:{version:'2.0',generator:'slate-studio obj import'},scene:0,scenes:[{nodes:nodesJ.map((_,i)=>i)}],nodes:nodesJ,meshes:meshes,materials:matList,accessors:acc,bufferViews:views,buffers:[{byteLength:tot}]};
+  let js=new TextEncoder().encode(JSON.stringify(g)); const jp=(4-js.length%4)%4; if(jp){ const j2=new Uint8Array(js.length+jp); j2.set(js); j2.fill(32,js.length); js=j2; }
+  const out=new Uint8Array(12+8+js.length+8+tot), dv=new DataView(out.buffer); dv.setUint32(0,0x46546C67,true); dv.setUint32(4,2,true); dv.setUint32(8,out.length,true);
+  dv.setUint32(12,js.length,true); dv.setUint32(16,0x4E4F534A,true); out.set(js,20); let p=20+js.length; dv.setUint32(p,tot,true); dv.setUint32(p+4,0x004E4942,true); p+=8;
+  bin.forEach(b=>{ out.set(b,p); p+=b.byteLength; }); return out.buffer;
+}
+function impReadText(f){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsText(f); }); }
+function impReadBuf(f){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsArrayBuffer(f); }); }
+function impOverride(spec){ const e=EMBED_GLB[spec.embed]; return e; }
+async function importModelFiles(fs){
+  try{
+    const f=fs.find(x=>/\.(glb|obj)$/i.test(x.name||'')); if(!f){ toast('Choose a .glb or .obj file (an .mtl can come with an .obj).'); return; }
+    if(f.size>60*1048576){ toast('That file is over 60 MB. Try a smaller model.'); return; }
+    if(!THREE.GLTFLoader){ toast('The model loader did not load. Reload the page.'); return; }
+    toast('Loading '+f.name+'...'); let buf;
+    if(/\.obj$/i.test(f.name)){ const mf=fs.find(x=>/\.mtl$/i.test(x.name||'')); buf=impObjToGlb(await impReadText(f),mf?await impReadText(mf):''); }
+    else { buf=await impReadBuf(f); const m=new Uint8Array(buf.slice(0,4)); if(String.fromCharCode(m[0],m[1],m[2],m[3])!=='glTF'){ toast('That file is not a valid GLB model.'); return; } }
+    impAdopt(buf,f.name.replace(/\.(glb|obj)$/i,'').slice(0,32)||'Imported model');
+  }catch(e){ toast('Could not import: '+((e&&e.message)||'error')); }
+}
+function importGlb(file){ importModelFiles([file]); }
+function impAdopt(buf,name){
+  new THREE.GLTFLoader().parse(buf.slice(0),'',gltf=>{ try{
+    const box=new THREE.Box3().setFromObject(gltf.scene), sz=box.getSize(new THREE.Vector3()), tall=sz.y>1.35*Math.max(sz.x,sz.z)||sz.y>=.8*Math.max(sz.x,sz.y,sz.z)&&sz.y>=sz.x*.9&&sz.y>=sz.z*1.2;
+    const gsize=tall?1.75:2.2, key='i'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), idx=EMBED_GLB.length;
+    EMBED_GLB.push({name:name,size:gsize,humanoid:false,tpose:false,r:[0,0,0],buf:buf,impKey:key});
+    const sp=mkSpec('glb',{name:name,embed:idx,gsize:gsize,imp:key,p:[orbit.target.x,0,orbit.target.z],r:[0,0,0]});
+    addNode(sp); selectId(sp.id); renderTimeline(); queueSave();
+    scIdbPut('imp:'+key,{buf:buf,name:name,gsize:gsize}).then(ok=>{ if(!ok) toast('Imported, but this browser could not keep the model after a reload.'); });
+    toast('Imported '+name+' and saved it with the project. '+(tall?'It looks like a character: open the Rig tab and auto-rig it.':''));
+  }catch(e){ toast('Could not add the model: '+((e&&e.message)||'error')); } },e=>toast('This model could not be loaded: '+((e&&e.message)||'it may use compression')));
+}
+/* a saved import only renders once its bytes are back: ignore a stale embed index from another session */
+(function(){ const _ef=embedFill; embedFill=function(group,spec){ if(spec.imp){ const e=EMBED_GLB[spec.embed]; if(!e||e.impKey!==spec.imp) return; } _ef(group,spec); }; })();
+async function impRestore(){
+  const ids=order.filter(id=>{ const n=nodes.get(id), sp=n&&n.userData.spec; return sp&&sp.type==='glb'&&sp.imp; });
+  for(const id of ids){ const sp=nodes.get(id).userData.spec; let idx=EMBED_GLB.findIndex(e=>e.impKey===sp.imp);
+    if(idx<0){ const v=await scIdbGet('imp:'+sp.imp); if(!v||!v.buf){ toast('The imported model "'+sp.name+'" is not on this device. Import it again.'); continue; }
+      idx=EMBED_GLB.length; EMBED_GLB.push({name:v.name||sp.name,size:v.gsize||2.2,humanoid:false,tpose:false,r:[0,0,0],buf:v.buf,impKey:sp.imp}); sp.gsize=sp.gsize||v.gsize; }
+    sp.embed=idx; try{ scReplaceNode(id); }catch(e){} }
+}
+(function(){ const _r=scIdbRestore; scIdbRestore=async function(){ try{ await _r(); }catch(e){} try{ await impRestore(); }catch(e){ console.warn('impRestore',e); } }; })();
+window.importModelFiles=importModelFiles;
 /* ---------- export a rigged character (skeleton, face, fingers, keyframe animation) as .glb for Blender ---------- */
 async function exportRigGLB(withAnim){
   const node=rigNode()||sculptTarget()||(S.sel&&S.sel!=='cam'&&S.sel!=='tgt'?nodes.get(S.sel):null); if(!node){ toast('Select a character or sculpt first.'); return; }
@@ -5929,6 +6017,7 @@ window.__jb.loadSculpt=loadJesvinSculpt;
 window.__jb.bbox=function(){ const o=[]; nodes.forEach(n=>{ if(n.userData.spec){ n.updateMatrixWorld(true); const bb=new THREE.Box3().setFromObject(n); let c=0,sk=0,vis=0; n.traverse(m=>{ if(m.isMesh){ c++; if(m.isSkinnedMesh) sk++; if(m.visible) vis++; } }); o.push([n.userData.spec.name,bb.min.toArray().map(v=>+v.toFixed(2)),bb.max.toArray().map(v=>+v.toFixed(2)),c,sk,vis]); } }); o.push(edit.position.toArray().map(v=>+v.toFixed(1))); return JSON.stringify(o); };
 window.__jb.nodesMap=nodes;
 window.__jb.importGlb=importGlb; window.__jb.rigDo=rigDo;
+window.__jb.sel=function(n){ selectId(n.userData.id); };
 
 /* ================= Character from the reference sheet ================= */
 function loadCharacter(){
@@ -6863,7 +6952,7 @@ async function chatRun(d){
   if($('#selAspect').value!==String(S.aspect)) $('#selAspect').value='2.39';
   applyLook(); refreshLook(); applyQuality(); setView('free'); setMode('translate');
   applyTracks(0); renderTimeline(); renderOutliner(); renderProps(); showTab('render'); fit(); rebuildEnv();
-  $('#stL').textContent='Build 146 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
+  $('#stL').textContent='Build 147 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
   try{ if(location.hash==='#dev') window.__dev={S,nodes,scene,edit,cinema,orbit,renderer,THREE,get:id=>nodes.get(id),sc:{scRefine,scSetTopo,scAdj,scUpdate}}; }catch(e){}
   try{ loadEmbedded(); }catch(e){}
   try{ if(!saved&&!localStorage.getItem('slate-welcome-v1')){ localStorage.setItem('slate-welcome-v1','1'); setTimeout(showWelcome,500); } }catch(e){ if(!saved) setTimeout(showWelcome,500); }

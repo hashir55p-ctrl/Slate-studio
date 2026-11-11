@@ -35,24 +35,44 @@ function chBuild(node){
   return node.userData.chains.length;
 }
 function chBuildAll(){ nodes.forEach(n=>{ if(n.userData.rig&&!n.userData.chBuilt){ let sk=0; n.traverse(o=>{ if(o.isSkinnedMesh) sk++; }); if(sk){ n.userData.chBuilt=1; try{ chBuild(n); }catch(e){ console.warn('chBuild',e); } } } }); }
+/* keyframes: spec.chk = [{t,wind,dir,stiff,damp,grav}] on the character; between keys the values blend linearly */
+function chSettings(n){ const K=n.userData.spec&&n.userData.spec.chk; if(!K||!K.length||CH.follow===false) return CH; const t=S.t, a=K.slice().sort((x,y)=>x.t-y.t);
+  const mix=(u,v,f)=>u+(v-u)*f; let k0=a[0], k1=a[a.length-1], f=0; if(t<=a[0].t){ k1=a[0]; } else if(t>=a[a.length-1].t){ k0=a[a.length-1]; } else { for(let i=0;i<a.length-1;i++){ if(t>=a[i].t&&t<=a[i+1].t){ k0=a[i]; k1=a[i+1]; f=(t-k0.t)/Math.max(1e-6,k1.t-k0.t); break; } } }
+  let dd=((k1.dir-k0.dir+540)%360)-180; return {on:CH.on,wind:mix(k0.wind,k1.wind,f),dir:k0.dir+dd*f,stiff:mix(k0.stiff,k1.stiff,f),damp:mix(k0.damp,k1.damp,f),grav:mix(k0.grav,k1.grav,f),gust:CH.gust}; }
+function chKeyHere(){ const n=rigNode(); if(!n||!n.userData.chains||!n.userData.chains.length){ toast('Select a rigged character that has hair or cloth chains.'); return; }
+  const sp=n.userData.spec, K=sp.chk||(sp.chk=[]), t=+S.t.toFixed(2), e={t:t,wind:CH.wind,dir:CH.dir,stiff:CH.stiff,damp:CH.damp,grav:CH.grav}; const i=K.findIndex(q=>Math.abs(q.t-t)<.05); if(i>=0) K[i]=e; else K.push(e);
+  K.sort((x,y)=>x.t-y.t); queueSave(); toast('Hair and cloth keyed at '+t.toFixed(2)+' s ('+K.length+' key'+(K.length>1?'s':'')+').'); }
+function chClearKeys(){ const n=rigNode(); if(!n) return; delete n.userData.spec.chk; queueSave(); toast('Hair and cloth keys cleared.'); }
+function chColliders(n){ const R=n.userData.rig; if(!R||!R.bones) return []; const B=R.bones, H=(R.H||1.75)*n.getWorldScale(new THREE.Vector3()).y, out=[];
+  const wp=nm=>B[nm]?B[nm].getWorldPosition(new THREE.Vector3()):null;
+  const seg=(a,b,r,tag)=>{ const A=wp(a), Bq=wp(b); if(A&&Bq) out.push({A:A,B:Bq,r:r*H,tag:tag}); };
+  seg('hips','spine',.058,'torso'); seg('spine','chest',.056,'torso'); seg('chest','neck',.054,'torso'); seg('neck','head',.032,'neck');
+  if(B.head){ const hp=B.head.getWorldPosition(new THREE.Vector3()), hq=B.head.getWorldQuaternion(new THREE.Quaternion()), up=new THREE.Vector3(0,1,0).applyQuaternion(hq).multiplyScalar(.055*H), c=hp.add(up); out.push({A:c,B:c.clone(),r:.058*H,tag:'head'}); }
+  ['L','R'].forEach(sd=>{ seg('upperArm.'+sd,'foreArm.'+sd,.03,'arm'); seg('foreArm.'+sd,'hand.'+sd,.026,'arm'); seg('upperLeg.'+sd,'lowerLeg.'+sd,.048,'leg'); seg('lowerLeg.'+sd,'foot.'+sd,.036,'leg'); });
+  return out; }
+const _chC=new THREE.Vector3(), _chD=new THREE.Vector3();
+function chCollide(P,N,cols,skip){ for(let k=2;k<=N;k++) for(let c=0;c<cols.length;c++){ const o=cols[c]; if(skip.indexOf(o.tag)>=0) continue;
+    _chD.subVectors(o.B,o.A); const l2=_chD.lengthSq(); let u=l2>1e-9?_chC.subVectors(P[k],o.A).dot(_chD)/l2:0; u=u<0?0:u>1?1:u; _chC.copy(o.A).addScaledVector(_chD,u);
+    _chD.subVectors(P[k],_chC); const d=_chD.length(); if(d<o.r){ if(d<1e-6) _chD.set(0,0,-1); else _chD.multiplyScalar(1/d); P[k].copy(_chC).addScaledVector(_chD,o.r); } } }
 const _chV=new THREE.Vector3(), _chQ=new THREE.Quaternion(), _chQi=new THREE.Quaternion();
 function chStep(dt){
   if(!CH.on) return; dt=Math.max(1/120,Math.min(1/20,dt||1/60)); const f=dt*60, tm=performance.now()/1000;
-  nodes.forEach(n=>{ const C=n.userData.chains; if(!C||!C.length) return;
+  nodes.forEach(n=>{ const C=n.userData.chains; if(!C||!C.length) return; const SET=chSettings(n), COL=CH.collide===false?[]:chColliders(n);
     C.forEach(c=>{ const par=c.parent; par.updateWorldMatrix(true,false); const N=c.N, T=c.restLocal.map(p=>par.localToWorld(p.clone()));
       if(!c.P||c.P[0].distanceTo(T[0])>.6){ c.P=T.map(p=>p.clone()); c.Pp=T.map(p=>p.clone()); }
-      const P=c.P, Pp=c.Pp, damp=Math.pow(CH.damp,f), st=1-Math.pow(1-CH.stiff,f), wd=CH.dir*Math.PI/180;
+      const P=c.P, Pp=c.Pp, damp=Math.pow(SET.damp,f), st=1-Math.pow(1-SET.stiff,f), wd=SET.dir*Math.PI/180;
       P[0].copy(T[0]); Pp[0].copy(T[0]);
-      for(let k=1;k<=N;k++){ const gust=1+CH.gust*(Math.sin(tm*1.7+k*.6)+Math.sin(tm*2.9+k))*.5, ax=Math.sin(wd)*CH.wind*3.5*gust, az=Math.cos(wd)*CH.wind*3.5*gust, ay=-9.8*CH.grav;
+      for(let k=1;k<=N;k++){ const gust=1+CH.gust*(Math.sin(tm*1.7+k*.6)+Math.sin(tm*2.9+k))*.5, ax=Math.sin(wd)*SET.wind*3.5*gust, az=Math.cos(wd)*SET.wind*3.5*gust, ay=-9.8*SET.grav;
         const vx=(P[k].x-Pp[k].x)*damp, vy=(P[k].y-Pp[k].y)*damp, vz=(P[k].z-Pp[k].z)*damp; Pp[k].copy(P[k]);
         P[k].x+=vx+ax*dt*dt; P[k].y+=vy+ay*dt*dt; P[k].z+=vz+az*dt*dt;
         P[k].x+=(T[k].x-P[k].x)*st; P[k].y+=(T[k].y-P[k].y)*st; P[k].z+=(T[k].z-P[k].z)*st; }
       for(let it=0;it<3;it++) for(let k=1;k<=N;k++){ _chV.subVectors(P[k],P[k-1]); const l=_chV.length()||1e-6; P[k].copy(P[k-1]).addScaledVector(_chV,c.L[k]/l); }
+      if(COL.length){ const skip=par===n.userData.rig.bones.head?['head','neck']:par===n.userData.rig.bones.hips?[]:[]; chCollide(P,N,COL,skip); for(let k=1;k<=N;k++){ _chV.subVectors(P[k],P[k-1]); const l=_chV.length()||1e-6; P[k].copy(P[k-1]).addScaledVector(_chV,c.L[k]/l); } }
       par.getWorldQuaternion(_chQ);
       for(let i=0;i<N;i++){ _chV.subVectors(P[i+1],P[i]).normalize(); _chQi.copy(_chQ).invert(); _chV.applyQuaternion(_chQi); const q=new THREE.Quaternion().setFromUnitVectors(c.r[i],_chV); c.bones[i].quaternion.copy(q); _chQ.multiply(q); }
     }); });
 }
-window.chStep=chStep; window.chBuildAll=chBuildAll; window.CH=CH;
+window.chStep=chStep; window.chKeyHere=chKeyHere; window.chColliders=chColliders; window.chCollide=chCollide; window.chSettings=chSettings; window.chBuildAll=chBuildAll; window.CH=CH;
 /* Rig tab controls */
 (function(){ const _b=buildRigPane; buildRigPane=function(){ _b(); try{
   const host=document.getElementById('pRig'); if(!host) return;
@@ -60,6 +80,9 @@ window.chStep=chStep; window.chBuildAll=chBuildAll; window.CH=CH;
   const sl=(label,min,max,step,key,fmt)=>rangeField(label,min,max,step,()=>CH[key],v=>{ CH[key]=v; },fmt||(v=>(+v).toFixed(2)));
   const tg=scBtn(CH.on?'Hair and cloth physics: on':'Hair and cloth physics: off',()=>{ CH.on=!CH.on; tg.textContent=CH.on?'Hair and cloth physics: on':'Hair and cloth physics: off'; },'hi');
   host.append(panel('Hair and cloth',[st,tg,sl('Spring (stiffness)',.02,.6,.01,'stiff'),sl('Swing (less = floppier)',.8,.99,.01,'damp'),sl('Wind strength',0,14,.1,'wind',v=>(+v).toFixed(1)),sl('Wind direction',-180,180,1,'dir',v=>Math.round(v)+'°'),sl('Gravity',0,1.5,.05,'grav')]));
+  const ck=scBtn('Collide with body: '+(CH.collide===false?'off':'on'),()=>{ CH.collide=CH.collide===false; ck.textContent='Collide with body: '+(CH.collide===false?'off':'on'); });
+  const kb=scBtn('Key hair and cloth at playhead',chKeyHere,'hi'), kc=scBtn('Clear hair and cloth keys',chClearKeys), kf=scBtn('Follow keys: on',()=>{ CH.follow=CH.follow===false; kf.textContent='Follow keys: '+(CH.follow===false?'off':'on'); });
+  host.lastChild.append(ck,kb,kf,kc);
   const note=document.createElement('p'); note.className='note'; host.lastChild.appendChild(note);
-  setInterval(()=>{ try{ const n=rigNode(); const c=n&&n.userData.chains; note.textContent=c&&c.length?('Chains found: '+c.map(x=>x.name).join(', ')):'No hair or cloth chains on this model.'; }catch(e){} },800);
+  setInterval(()=>{ try{ const n=rigNode(); const c=n&&n.userData.chains; const kk=n&&n.userData.spec&&n.userData.spec.chk; note.textContent=(c&&c.length?('Chains found: '+c.map(x=>x.name).join(', ')):'No hair or cloth chains on this model.')+(kk&&kk.length?' Keys at: '+kk.map(q=>q.t.toFixed(1)+'s').join(', ')+'.':' No keys yet.'); }catch(e){} },800);
  }catch(e){ console.warn('chain ui',e); } }; })();

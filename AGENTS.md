@@ -43,3 +43,8 @@ Slate Studio is a Blender-like 3D animation/sculpting app that runs in one web p
 - `src/chainrig.js`: after rigging, parts named hair_*, ponytail, braid, ribbon (head), cape, cloak, scarf (chest) and skirt, robe, tail, sash (hips) get bone chains with spring and wind (settings `CH`, Rig tab > Hair and cloth). Names with cap/scalp/base/stiff stay rigid. Per-frame hook: `chStep(dt)` in ui3a.js; build hook in the 45-frame block.
 - `src/jesvin_base.js`: Jesvin on the base male, Jesvin v2 (sculpted, rigged), `window.__jb` test hooks.
 - Chains are not yet keyframable, not collision-aware, and wind is real-time (not frame-deterministic for export).
+
+## Build 147 notes
+- `src/impmodel.js`: Import model (GLB or OBJ+MTL). OBJ is converted to GLB in memory (o/g names become mesh names, `v x y z r g b` vertex colours kept). Imported bytes are stored in IndexedDB key `imp:<key>`; the node is a normal `glb` spec with `imp` and an `EMBED_GLB` entry (`impKey`). `impRestore()` runs from `scIdbRestore()` at startup.
+- `src/chainrig.js` additions: chain keyframes (`spec.chk`, Rig tab > Hair and cloth > Key at playhead) and capsule collision against body bones (`chColliders`, `chCollide`; head/neck skipped for hair chains).
+- Textures are not imported from OBJ/MTL yet (only Kd colours and vertex colours).
