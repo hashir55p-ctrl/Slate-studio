@@ -117,7 +117,7 @@ function rigAuto(node,spec){
     }
     it.g.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(si,4)); it.g.setAttribute('skinWeight',new THREE.Float32BufferAttribute(sw,4));
     [].concat(it.m).forEach(m=>{ m.skinning=true; m.needsUpdate=true; });
-    const sm=new THREE.SkinnedMesh(it.g,it.m); sm.castShadow=true; sm.receiveShadow=true; sm.frustumCulled=false; sm.userData.rigOwned=true; sm.userData.paint=it.paint; node.add(sm);
+    const sm=new THREE.SkinnedMesh(it.g,it.m); sm.castShadow=true; sm.receiveShadow=true; sm.frustumCulled=false; sm.userData.rigOwned=true; sm.userData.paint=it.paint; sm.userData.part=it.o.name||''; node.add(sm);
     node.updateMatrixWorld(true); sm.bind(skel,sm.matrixWorld);
   });
   items.forEach(it=>{ if(it.o.parent) it.o.parent.remove(it.o); it.o.geometry.dispose(); });

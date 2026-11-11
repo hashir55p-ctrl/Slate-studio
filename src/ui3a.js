@@ -152,7 +152,7 @@ function tick(now){
   const showRig=S.view==='free'&&!S.recording;
   camNode.visible=showRig; tgtNode.visible=showRig; link.visible=showRig; grid.visible=showRig&&!kochiOn; tc.visible=showRig;
   if(S.view==='free'&&orbit.enabled) orbit.update();
-  grade.uniforms.time.value=(now%997)/997; if(!(frameN%45)){ pixarSync(); if(typeof recolorChars==="function") recolorChars(); }
+  grade.uniforms.time.value=(now%997)/997; if(!(frameN%45)){ pixarSync(); if(typeof recolorChars==="function") recolorChars(); if(window.jbaseTick) jbaseTick(); }
   const useComposer=(S.quality==='final'||S.recording)&&!S.composerBroken;
   try{
     if(useComposer){ renderer.toneMapping=THREE.NoToneMapping; renderer.outputEncoding=THREE.LinearEncoding; composer.render(dt); }
