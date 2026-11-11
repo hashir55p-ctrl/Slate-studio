@@ -4353,7 +4353,7 @@ function scJesvinSdf(){
     const shoe=ell(sx,y,z,.112,.055,.045,.056,.048,.128), sole=ell(sx,y,z,.112,.018,.05,.062,.02,.14);
     /* backpack and straps */
     let bag=ell(x,y,z,0,1.2,-.19,.15,.205,.072); bag=smin(bag,ell(x,y,z,0,1.1,-.255,.11,.085,.026),.015);
-    const straps=Math.min(cap(sx,y,z,.085,1.4,-.13,.1,1.44,-.02,.016),Math.min(cap(sx,y,z,.1,1.44,-.02,.11,1.38,.12,.016),cap(sx,y,z,.11,1.38,.12,.115,1.16,.135,.016)));
+    const straps=Math.min(cap(sx,y,z,.085,1.4,-.13,.1,1.44,-.02,.0085),Math.min(cap(sx,y,z,.1,1.44,-.02,.11,1.38,.12,.0085),cap(sx,y,z,.11,1.38,.12,.115,1.16,.135,.0085)));
     bag=Math.min(bag,straps);
     return {skin,hair,beard,brow,hood,strings,jeans,shoe,sole,bag};
   };
@@ -4367,7 +4367,7 @@ function scJesvinPaint(J,pos){
     let c=C[best==='hood'?'hood':best==='strings'?'string':best==='bag'?'bag':best==='shoe'?'shoe':best];
     const hx=x, hy=y-J.HY, hz=z-J.HZ, sx=Math.abs(x);
     if(best==='skin'&&y>1.45){ const ex=Math.abs(hx)-.033, ey=hy-.004, ez=hz-.086, er=Math.hypot(ex,ey,ez);
-      if(er<.0135&&hz>.0925){ const fr=Math.hypot(ex,ey); c=fr<.0062?C.iris:C.eyeW; }
+      if(er<.0135&&hz>.0925){ if(!window.SC_NOEYE){ const fr=Math.hypot(ex,ey); c=fr<.0062?C.iris:C.eyeW; } }
       else if(Math.abs(hx)<.024&&hy<-.058&&hy>-.083&&hz>.092) c=C.lip; }
     if(best==='hood'&&Math.abs(y-1.05)<.07&&z>.1&&Math.abs(x)<.125) c=C.hoodD;
     if(best==='hood'&&Math.abs(y-.985)<.04) c=C.hoodD;
@@ -5759,7 +5759,14 @@ function jbDress(n){
   n.userData.jbMats=[skin,hood,jean,shoe]; n.userData.jbParts=parts;
   return true;
 }
+function jbDetail(n){
+  const m=crSkinMaps(.1,.1); let did=false;
+  n.traverse(o=>{ if(!o.isSkinnedMesh||!o.userData.rigOwned||o.userData.jbUV) return; try{ jbUV(o.geometry,'y'); o.userData.jbUV=1;
+    [].concat(o.material).forEach(mt=>{ if(mt.userData.jbBump) return; mt.bumpMap=m.bump; mt.bumpScale=.0016; mt.userData.jbBump=1; mt.needsUpdate=true; }); did=true; }catch(e){ console.warn('jbDetail',e); } });
+  return did;
+}
 function jbaseTick(){
+  nodes.forEach(n=>{ const sp=n.userData.spec; if(sp&&sp.jv2&&!n.userData.jbDone){ if(jbDetail(n)) n.userData.jbDone=1; return; } });
   nodes.forEach(n=>{ const sp=n.userData.spec; if(!sp||!sp.jb||n.userData.jbDone) return; let ok=false; try{ ok=jbDress(n); }catch(e){ console.warn('jbDress',e); n.userData.jbDone=1; return; } if(ok){ n.userData.jbDone=1; try{ jbAccessories(n); }catch(e){ console.warn('jbAccessories',e); } } });
 }
 function jbAccessories(n){
@@ -5834,6 +5841,27 @@ function loadJesvinBase(){
 }
 window.__jb={dress:jbDress,tick:jbaseTick,JB:JB,load:loadJesvinBase}; window.jbaseTick=jbaseTick;
 window.__jb.nodes=()=>nodes; window.__jb.cam=function(a,t){ orbit.target.set(t[0],t[1],t[2]); edit.position.set(a[0],a[1],a[2]); orbit.update(); };
+window.__jb.scNew=function(s,d){ SCU.detail=d||"high"; scNew(s); };
+window.__jb.rigSculpt=function(){ const id=S.sel, n=nodes.get(id); if(!n) return 'no sel'; const sp=n.userData.spec; sp.rig={rot:0}; const nn=rigRebuild(id); return Object.keys((nn.userData.rig||{}).bones||{}).length; };
+
+/* Jesvin v2: the sculpted one-piece body, auto-rigged with the face rig */
+window.SC_NOEYE=false;
+function loadJesvinSculpt(){
+  if(S.recording) return;
+  S.playing=false; syncPlay(); scEnd();
+  loadProject({objs:[],cam:{p:[0,1.3,4.6]},tgt:{p:[0,.95,0]},tracks:{},duration:8});
+  kochiEnv(false); applyPreset('studio'); setAspect(1.78);
+  toast('Building Jesvin as one smooth body...');
+  window.SC_NOEYE=true; SCU.detail='high';
+  setTimeout(()=>{ try{
+    const sp=sculptCreate({shape:'jesvin',detail:'high',name:'Jesvin'}); refreshScene(); selectId(sp.id);
+    sp.rig={rot:0}; sp.jv2=1; rigRebuild(sp.id);
+    orbit.target.set(0,.95,0); edit.position.set(2.2,1.5,4.2); orbit.update(); applyLook(); saveNow();
+    toast('Jesvin is ready: one smooth body, rigged with the face rig. Open the Rig tab to pose him.');
+  }catch(e){ toast('Jesvin build error: '+((e&&e.message)||e)); } finally{ window.SC_NOEYE=false; } },60);
+}
+window.__jb.loadSculpt=loadJesvinSculpt;
+window.__jb.bbox=function(){ const o=[]; nodes.forEach(n=>{ if(n.userData.spec){ n.updateMatrixWorld(true); const bb=new THREE.Box3().setFromObject(n); let c=0,sk=0,vis=0; n.traverse(m=>{ if(m.isMesh){ c++; if(m.isSkinnedMesh) sk++; if(m.visible) vis++; } }); o.push([n.userData.spec.name,bb.min.toArray().map(v=>+v.toFixed(2)),bb.max.toArray().map(v=>+v.toFixed(2)),c,sk,vis]); } }); o.push(edit.position.toArray().map(v=>+v.toFixed(1))); return JSON.stringify(o); };
 
 /* ================= Character from the reference sheet ================= */
 function loadCharacter(){
@@ -6731,7 +6759,7 @@ async function chatRun(d){
   const P=document.createElement('div'); P.id='assetP'; P.innerHTML='<div class="ah"><span>Assets</span><button type="button">Close</button></div><div class="ab"></div>'; document.body.appendChild(P);
   const T=(f)=>()=>{ try{ f(); }catch(e){ toast((e&&e.message)||'Could not load that.'); } };
   const FOLDERS=[
-   ['Characters','Loaded from the assets folder.',[['The four friends','',loadFriends],['Stany','3D',loadStany],['Jesvin','3D',loadRealCharacter],['Jesvin (full rig, face rig)','3D',loadJesvinRig],['Hashir','3D',loadHashir],['Renjith','3D',loadRenjith],['Sculpted character (blocks)','',()=>loadCharacter()],['Base anatomy: male','3D',loadBaseKun],['Jesvin (on base male)','3D',loadJesvinBase],['Base anatomy: female','3D',loadBaseChan],['Character creator...','',crPanel]]],
+   ['Characters','Loaded from the assets folder.',[['The four friends','',loadFriends],['Stany','3D',loadStany],['Jesvin','3D',loadRealCharacter],['Jesvin (full rig, face rig)','3D',loadJesvinRig],['Hashir','3D',loadHashir],['Renjith','3D',loadRenjith],['Sculpted character (blocks)','',()=>loadCharacter()],['Base anatomy: male','3D',loadBaseKun],['Jesvin v2 (one smooth body, rigged)','3D',loadJesvinSculpt],['Jesvin (on base male)','3D',loadJesvinBase],['Base anatomy: female','3D',loadBaseChan],['Character creator...','',crPanel]]],
    ['Scenes','',[['Chapter 1 · Scene 1: Kochi cafe (real 3D location)','3D, with dialogue',scene1Real],['Chapter 1 · Scene 2: Jeep to Wayanad','3D, with dialogue',scene2],['Chapter 1 · Scene 1: Kochi cafe','3D, with dialogue',scene1],['Jesvin, one line (full face and hands)','3D, with dialogue',sceneJesvinLine],['Jesvin sings (from your video)','3D',sceneJesvinSing],['Fort Kochi seafront','',loadKochi],['Fort Kochi (real 3D models)','textured, wind and bobbing',loadKochiReal],['Fort Kochi from image layout','',()=>buildScene(KOCHI_LAYOUT)],['Library hall (from image)','',()=>loadLibrary()],['New empty scene','',newEmptyScene]]],
    ['Props and demos','',[['Camera prop (DSLR)','',addCameraProp],['Jeep demo (wheel spin)','',jeepDemo]]],
    ['Models','',[['Import GLB model...','',openGlb]]],

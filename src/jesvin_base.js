@@ -48,7 +48,14 @@ function jbDress(n){
   n.userData.jbMats=[skin,hood,jean,shoe]; n.userData.jbParts=parts;
   return true;
 }
+function jbDetail(n){
+  const m=crSkinMaps(.1,.1); let did=false;
+  n.traverse(o=>{ if(!o.isSkinnedMesh||!o.userData.rigOwned||o.userData.jbUV) return; try{ jbUV(o.geometry,'y'); o.userData.jbUV=1;
+    [].concat(o.material).forEach(mt=>{ if(mt.userData.jbBump) return; mt.bumpMap=m.bump; mt.bumpScale=.0016; mt.userData.jbBump=1; mt.needsUpdate=true; }); did=true; }catch(e){ console.warn('jbDetail',e); } });
+  return did;
+}
 function jbaseTick(){
+  nodes.forEach(n=>{ const sp=n.userData.spec; if(sp&&sp.jv2&&!n.userData.jbDone){ if(jbDetail(n)) n.userData.jbDone=1; return; } });
   nodes.forEach(n=>{ const sp=n.userData.spec; if(!sp||!sp.jb||n.userData.jbDone) return; let ok=false; try{ ok=jbDress(n); }catch(e){ console.warn('jbDress',e); n.userData.jbDone=1; return; } if(ok){ n.userData.jbDone=1; try{ jbAccessories(n); }catch(e){ console.warn('jbAccessories',e); } } });
 }
 function jbAccessories(n){
@@ -123,3 +130,24 @@ function loadJesvinBase(){
 }
 window.__jb={dress:jbDress,tick:jbaseTick,JB:JB,load:loadJesvinBase}; window.jbaseTick=jbaseTick;
 window.__jb.nodes=()=>nodes; window.__jb.cam=function(a,t){ orbit.target.set(t[0],t[1],t[2]); edit.position.set(a[0],a[1],a[2]); orbit.update(); };
+window.__jb.scNew=function(s,d){ SCU.detail=d||"high"; scNew(s); };
+window.__jb.rigSculpt=function(){ const id=S.sel, n=nodes.get(id); if(!n) return 'no sel'; const sp=n.userData.spec; sp.rig={rot:0}; const nn=rigRebuild(id); return Object.keys((nn.userData.rig||{}).bones||{}).length; };
+
+/* Jesvin v2: the sculpted one-piece body, auto-rigged with the face rig */
+window.SC_NOEYE=false;
+function loadJesvinSculpt(){
+  if(S.recording) return;
+  S.playing=false; syncPlay(); scEnd();
+  loadProject({objs:[],cam:{p:[0,1.3,4.6]},tgt:{p:[0,.95,0]},tracks:{},duration:8});
+  kochiEnv(false); applyPreset('studio'); setAspect(1.78);
+  toast('Building Jesvin as one smooth body...');
+  window.SC_NOEYE=true; SCU.detail='high';
+  setTimeout(()=>{ try{
+    const sp=sculptCreate({shape:'jesvin',detail:'high',name:'Jesvin'}); refreshScene(); selectId(sp.id);
+    sp.rig={rot:0}; sp.jv2=1; rigRebuild(sp.id);
+    orbit.target.set(0,.95,0); edit.position.set(2.2,1.5,4.2); orbit.update(); applyLook(); saveNow();
+    toast('Jesvin is ready: one smooth body, rigged with the face rig. Open the Rig tab to pose him.');
+  }catch(e){ toast('Jesvin build error: '+((e&&e.message)||e)); } finally{ window.SC_NOEYE=false; } },60);
+}
+window.__jb.loadSculpt=loadJesvinSculpt;
+window.__jb.bbox=function(){ const o=[]; nodes.forEach(n=>{ if(n.userData.spec){ n.updateMatrixWorld(true); const bb=new THREE.Box3().setFromObject(n); let c=0,sk=0,vis=0; n.traverse(m=>{ if(m.isMesh){ c++; if(m.isSkinnedMesh) sk++; if(m.visible) vis++; } }); o.push([n.userData.spec.name,bb.min.toArray().map(v=>+v.toFixed(2)),bb.max.toArray().map(v=>+v.toFixed(2)),c,sk,vis]); } }); o.push(edit.position.toArray().map(v=>+v.toFixed(1))); return JSON.stringify(o); };

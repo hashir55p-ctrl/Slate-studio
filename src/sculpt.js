@@ -351,7 +351,7 @@ function scJesvinSdf(){
     const shoe=ell(sx,y,z,.112,.055,.045,.056,.048,.128), sole=ell(sx,y,z,.112,.018,.05,.062,.02,.14);
     /* backpack and straps */
     let bag=ell(x,y,z,0,1.2,-.19,.15,.205,.072); bag=smin(bag,ell(x,y,z,0,1.1,-.255,.11,.085,.026),.015);
-    const straps=Math.min(cap(sx,y,z,.085,1.4,-.13,.1,1.44,-.02,.016),Math.min(cap(sx,y,z,.1,1.44,-.02,.11,1.38,.12,.016),cap(sx,y,z,.11,1.38,.12,.115,1.16,.135,.016)));
+    const straps=Math.min(cap(sx,y,z,.085,1.4,-.13,.1,1.44,-.02,.0085),Math.min(cap(sx,y,z,.1,1.44,-.02,.11,1.38,.12,.0085),cap(sx,y,z,.11,1.38,.12,.115,1.16,.135,.0085)));
     bag=Math.min(bag,straps);
     return {skin,hair,beard,brow,hood,strings,jeans,shoe,sole,bag};
   };
@@ -365,7 +365,7 @@ function scJesvinPaint(J,pos){
     let c=C[best==='hood'?'hood':best==='strings'?'string':best==='bag'?'bag':best==='shoe'?'shoe':best];
     const hx=x, hy=y-J.HY, hz=z-J.HZ, sx=Math.abs(x);
     if(best==='skin'&&y>1.45){ const ex=Math.abs(hx)-.033, ey=hy-.004, ez=hz-.086, er=Math.hypot(ex,ey,ez);
-      if(er<.0135&&hz>.0925){ const fr=Math.hypot(ex,ey); c=fr<.0062?C.iris:C.eyeW; }
+      if(er<.0135&&hz>.0925){ if(!window.SC_NOEYE){ const fr=Math.hypot(ex,ey); c=fr<.0062?C.iris:C.eyeW; } }
       else if(Math.abs(hx)<.024&&hy<-.058&&hy>-.083&&hz>.092) c=C.lip; }
     if(best==='hood'&&Math.abs(y-1.05)<.07&&z>.1&&Math.abs(x)<.125) c=C.hoodD;
     if(best==='hood'&&Math.abs(y-.985)<.04) c=C.hoodD;
