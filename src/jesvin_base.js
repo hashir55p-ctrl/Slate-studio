@@ -2,7 +2,7 @@
    Dresses the bundled male base anatomy: human-textured skin, hoodie, jeans, sneakers,
    curly hair, full beard, round glasses, eyes and a backpack. Runs once per node from
    jbaseTick() (called from the render loop), after the auto-rig has produced the skinned parts. */
-const JB={skin:'#855640',hair:'#18120e',hoodie:'#4d4a2c',jeans:'#4a6188',shoe:'#ebe7de',bag:'#5f7247',eye:'#2b1b12'};
+const JB={skin:'#6e4632',hair:'#18120e',hoodie:'#4d4a2c',jeans:'#4a6188',shoe:'#ebe7de',bag:'#5f7247',eye:'#2b1b12'};
 function jbFabric(c,rough,kind){
   const S=128, cv=document.createElement('canvas'); cv.width=cv.height=S; const x=cv.getContext('2d'), im=x.createImageData(S,S), d=im.data; let sd=7; const rnd=()=>{ sd=(sd*1664525+1013904223)>>>0; return sd/4294967296; };
   for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const k=(j*S+i)*4; let v;
@@ -77,9 +77,18 @@ function jbAccessories(n){
       pp.set(HP.getX(i)+nx*o+(rnd()-.5)*jit, HP.getY(i)+ny*o+(rnd()-.5)*jit, HP.getZ(i)+nz*o+(rnd()-.5)*jit).applyMatrix4(MH);
       const s0=sMin+rnd()*(sMax-sMin); sc.set(s0,s0*(.7+rnd()*.5),s0); q.setFromEuler(new THREE.Euler(rnd()*6,rnd()*6,rnd()*6)); m4.compose(pp,q,sc); im.setMatrixAt(k++,m4); } });
     im.instanceMatrix.needsUpdate=true; im.frustumCulled=false; im.castShadow=true; im.userData.jbAcc=true; return im; };
-  const hairM=mk(JB.hair,.5), hair=mkInst(new THREE.IcosahedronGeometry(1,1),hairM,hairInst,.01,.012,.019,.013,1); head.add(hair);
+  /* paint the beard and scalp into the skin (vertex colours) so no bare skin shows between the strands */
+  { const col=new Float32Array(HP.count*3), dk=new THREE.Color(.075,.055,.045); const sm=(a,b,x)=>{ const q=Math.max(0,Math.min(1,(x-a)/(b-a))); return q*q*(3-2*q); };
+    for(let i=0;i<HP.count;i++){ const x=HP.getX(i), y=HP.getY(i), z=HP.getZ(i), t=(y-mnY)/hh, ax=Math.abs(x), front=z>cz+.02, back=z<cz-.04;
+      let w=0; const hl=front?.84:back?.46:.64; w=Math.max(w,sm(hl-.05,hl+.02,t)*(ax>.07&&t<.66&&!back?0:1));
+      const jaw=sm(.44,.30,t)*sm(cz-.05,cz-.0,z); const mouth=(t>.2&&t<.28&&ax<.026&&z>cz)?0:1; w=Math.max(w,jaw*mouth*.92);
+      const mus=(t>.3&&t<.42&&ax<.04&&z>cz+.02)?.9:0; w=Math.max(w,mus);
+      const n=.8+.2*Math.sin(x*900)*Math.sin(y*870+z*300); w*=n; col[i*3]=1+(dk.r-1)*w; col[i*3+1]=1+(dk.g-1)*w; col[i*3+2]=1+(dk.b-1)*w; }
+    parts.head.geometry.setAttribute('color',new THREE.BufferAttribute(col,3));
+    const hm=parts.head.material.clone(); hm.vertexColors=true; hm.skinning=true; hm.needsUpdate=true; parts.head.material=hm; n.userData.jbMats.push(hm); }
+  const hairM=mk(JB.hair,.5), hair=mkInst(new THREE.TorusGeometry(.0085,.0034,6,10),hairM,hairInst,.008,.8,1.5,.008,3); head.add(hair);
   const jawB=(R.faceBones&&R.faceBones.jaw)||null; const beardM=mk(JB.hair,.7);
-  const beard=mkInst(new THREE.IcosahedronGeometry(1,0),beardM,beardInst,.003,.0034,.005,.0025,2); head.add(beard);
+  const beard=mkInst(new THREE.CylinderGeometry(.0009,.0005,.010,4),beardM,beardInst,.004,.8,1.6,.002,5); head.add(beard);
   /* glasses, brows from the eye positions */
   if(eyes.length>=2){ const e0=eyes[0], e1=eyes[1], mid=e0.position.clone().add(e1.position).multiplyScalar(.5), half=e0.position.distanceTo(e1.position)/2;
     const G=new THREE.Group(); G.position.copy(mid); G.quaternion.copy(e0.quaternion); head.add(G); G.userData.jbAcc=true;

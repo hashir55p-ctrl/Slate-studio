@@ -40,15 +40,21 @@ function crSkinMaps(fr,fl){
   bx.globalCompositeOperation='source-over';
   for(let i=0;i<2600;i++){ const x=rnd()*S,y=rnd()*S,r=.8+rnd()*1.2; wrap(bx,x,y,(X,Y)=>{ const g=bx.createRadialGradient(X,Y,0,X,Y,r*1.6); g.addColorStop(0,'rgba(60,60,60,.55)'); g.addColorStop(1,'rgba(60,60,60,0)'); bx.fillStyle=g; bx.beginPath(); bx.arc(X,Y,r*1.6,0,6.2832); bx.fill(); }); }   /* pores */
   const tx=(c,srgb)=>{ const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(3,3); t.generateMipmaps=true; t.minFilter=THREE.LinearMipmapLinearFilter; t.anisotropy=4; if(srgb) t.encoding=THREE.sRGBEncoding; return t; };
-  return CR_SKINCACHE[key]={color:tx(cc,true),bump:tx(bc,false)};
+  const R={color:tx(cc,true),bump:tx(bc,false)}; CR_SKINCACHE[key]=R;
+  /* real skin detail from the reference photos (grayscale, seamless): soft-light on bump/colour once the image decodes */
+  try{ const im=new Image(); im.onload=()=>{ const apply=(cv,tex,a)=>{ const x=cv.getContext('2d'); x.globalAlpha=a; x.globalCompositeOperation='overlay'; x.drawImage(im,0,0,S,S); x.globalCompositeOperation='source-over'; x.globalAlpha=1; tex.needsUpdate=true; };
+      apply(bc,R.bump,1); const x=bc.getContext('2d'); x.globalAlpha=.6; x.globalCompositeOperation='overlay'; x.drawImage(im,0,0,S,S); x.globalAlpha=1; x.globalCompositeOperation='source-over'; R.bump.needsUpdate=true;
+      const cx2=cc.getContext('2d'); cx2.globalAlpha=.55; cx2.globalCompositeOperation='soft-light'; cx2.drawImage(im,0,0,S,S); cx2.globalAlpha=1; cx2.globalCompositeOperation='source-over'; R.color.needsUpdate=true; };
+    im.src=SKIN_PHOTO; }catch(e){}
+  return R;
 }
 function crSkinMat(c,fr,fl){
   fr=fr==null?.25:+fr; fl=fl==null?.3:+fl;
   const m=crSkinMaps(fr,fl);
   const mat=new THREE.MeshPhysicalMaterial({color:lin(c),roughness:.62,metalness:0});
-  mat.map=m.color; mat.bumpMap=m.bump; mat.bumpScale=.0011; mat.roughnessMap=m.bump;
-  mat.clearcoat=.07; mat.clearcoatRoughness=.55;                                   /* faint oily sheen */
-  if(mat.sheen!==undefined){ mat.sheen=new THREE.Color(.55,.2,.16); }            /* warm, SSS-like edge */
+  mat.map=m.color; mat.bumpMap=m.bump; mat.bumpScale=.0021; mat.roughnessMap=m.bump;
+  mat.emissive=lin(c).multiplyScalar(.02); mat.clearcoat=.07; mat.clearcoatRoughness=.55;                                   /* faint oily sheen */
+  if(mat.sheen!==undefined){ mat.sheen=new THREE.Color(.22,.08,.06); }            /* warm, SSS-like edge */
   mat.userData.skinMicroTexture=true; mat.userData.humanSkin=true; mat.needsUpdate=true; return mat;
 }
 function crMakeTorsoMesh(root,bones,boneList,H,B,SH,waistW,hipW,chestW,feminine,bust,mat){
