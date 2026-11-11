@@ -37,3 +37,9 @@ Slate Studio is a Blender-like 3D animation/sculpting app that runs in one web p
 - Planned: modular characters (separate eyes, brows, hands, clothes, hair), path-traced "final still" mode, Apple Pencil pressure and faster dynamic-detail sculpting.
 - Scene 2 (jeep drive) is waiting for the final dialogue audio (`assets/s2.mp3`, built with `tools/mkvb.py` into `src/embed_vo2.js`, then added before `scene2.js` in `build.sh`).
 - Build 143 still had these creator bugs after they were fixed once (the fixes were lost when the zip replaced the files). If you work from an older copy, pull the latest `main` first. `piece()` in `creator.js` returns a geometry, not a mesh: wrap it in `new THREE.Mesh(geo, material)` before `add(...)`.
+
+
+## Build 146 notes
+- `src/chainrig.js`: after rigging, parts named hair_*, ponytail, braid, ribbon (head), cape, cloak, scarf (chest) and skirt, robe, tail, sash (hips) get bone chains with spring and wind (settings `CH`, Rig tab > Hair and cloth). Names with cap/scalp/base/stiff stay rigid. Per-frame hook: `chStep(dt)` in ui3a.js; build hook in the 45-frame block.
+- `src/jesvin_base.js`: Jesvin on the base male, Jesvin v2 (sculpted, rigged), `window.__jb` test hooks.
+- Chains are not yet keyframable, not collision-aware, and wind is real-time (not frame-deterministic for export).

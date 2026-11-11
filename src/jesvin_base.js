@@ -151,3 +151,5 @@ function loadJesvinSculpt(){
 }
 window.__jb.loadSculpt=loadJesvinSculpt;
 window.__jb.bbox=function(){ const o=[]; nodes.forEach(n=>{ if(n.userData.spec){ n.updateMatrixWorld(true); const bb=new THREE.Box3().setFromObject(n); let c=0,sk=0,vis=0; n.traverse(m=>{ if(m.isMesh){ c++; if(m.isSkinnedMesh) sk++; if(m.visible) vis++; } }); o.push([n.userData.spec.name,bb.min.toArray().map(v=>+v.toFixed(2)),bb.max.toArray().map(v=>+v.toFixed(2)),c,sk,vis]); } }); o.push(edit.position.toArray().map(v=>+v.toFixed(1))); return JSON.stringify(o); };
+window.__jb.nodesMap=nodes;
+window.__jb.importGlb=importGlb; window.__jb.rigDo=rigDo;
