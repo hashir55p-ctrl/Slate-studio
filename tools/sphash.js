@@ -1,0 +1,11 @@
+const h=require('./hs.js');(async()=>{const {b,p}=await h.open({vp:{width:1100,height:700}});
+await p.click('text=Start with an empty scene'); await p.waitForTimeout(800);
+const st=await p.evaluate(()=>{ const r=document.getElementById('stage').getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; });
+const clip={x:st.x,y:st.y+16,width:st.w,height:st.h-16};
+await p.evaluate(()=>window.__sp.spJesvin()); await p.waitForTimeout(22000);
+await p.screenshot({path:'s1r/hs_f_ov.png',clip});
+await p.evaluate(()=>{ window.__sp.scGuide.op=.0; window.__sp.scGuide.img.style.opacity='0'; }); await p.waitForTimeout(800);
+await p.screenshot({path:'s1r/hs_f_clay.png',clip});
+await p.evaluate(()=>{ window.__sp.SP.cur='side'; window.__sp.scAlign('side'); window.__sp.spFrame('side'); }); await p.waitForTimeout(1500);
+await p.screenshot({path:'s1r/hs_s_clay.png',clip});
+console.log(p.errs); await b.close();})();

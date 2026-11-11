@@ -1,0 +1,265 @@
+<title>Slate Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: Blender's editor grid. Menu bar and workspace tabs on top, tool strip + 3D viewport + timeline on the left, outliner over properties editor on the right (stacked on phones). */
+:root{
+  --win:#161616; --area:#2a2a2a; --head:#303030; --panel-h:#3b3b3b; --field:#1d1d1d;
+  --btn:#4a4a4a; --btn-hi:#5a5a5a; --line:#0f0f0f; --fg:#dedede; --mute:#9a9a9a;
+  --accent:#4772b3; --accent-hi:#5b86c9; --select:#ffb028; --pop:#1f1f1f;
+  --vp:#0c0c0c; --playhead:#3a68b8; --key:#e6e6e6; --danger:#e0705f;
+  --f-ui:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--win);color:var(--fg);font:12.5px/1.35 var(--f-ui);font-variant-numeric:tabular-nums;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:6px 10px}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent-hi);outline-offset:1px}
+.blender{display:flex;flex-direction:column;gap:3px;max-width:1700px;margin:0 auto}
+.b-top{display:flex;align-items:center;gap:2px;background:var(--head);border-radius:4px;padding:2px 4px;min-height:32px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;padding:0 8px 0 4px}
+.mbtn{height:26px;padding:0 9px;border:0;background:transparent;border-radius:4px}
+.mbtn:hover,.mbtn.open{background:var(--btn)}
+.wsp{display:flex;gap:2px;margin-left:14px}
+.wsp button{height:26px;padding:0 14px;border:0;background:transparent;color:var(--mute);border-radius:4px}
+.wsp button.on{background:var(--btn);color:var(--fg)}
+.b-sp{flex:1}
+.scene-name{color:var(--mute);padding:0 8px}
+.b-body{display:grid;grid-template-columns:38px minmax(0,1fr) 330px;grid-template-areas:"tool vp side" "tl tl side";gap:3px;align-items:stretch}
+.tools{grid-area:tool;display:flex;flex-direction:column;gap:2px;padding:4px 3px;background:var(--head);border-radius:4px;align-self:start}
+.tbtn{width:32px;height:32px;border:0;background:transparent;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.tbtn:hover{background:var(--btn)}
+.tbtn.on{background:var(--accent);color:#fff}
+.tbtn:disabled{opacity:.35;cursor:not-allowed}
+.tools .sepv{height:1px;background:var(--line);margin:3px 2px}
+.viewport{grid-area:vp;display:flex;flex-direction:column;min-width:0;background:var(--head);border-radius:4px;overflow:hidden}
+.vhead{display:flex;align-items:center;gap:2px;padding:2px 4px;min-height:30px;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+.vhead::-webkit-scrollbar{display:none}
+.vmode{padding:0 10px;height:24px;display:inline-flex;align-items:center;background:var(--btn);border-radius:4px;margin-right:6px;color:var(--fg)}
+.hsp{flex:1;min-width:8px}
+.hbtn{height:26px;min-width:28px;padding:0 6px;border:0;background:transparent;border-radius:4px;display:inline-flex;align-items:center;justify-content:center}
+.hbtn:hover{background:var(--btn)}
+.hbtn.on{background:var(--accent);color:#fff}
+#vp{position:relative;height:clamp(300px,58vh,720px);container-type:size;background:var(--vp);display:flex;align-items:center;justify-content:center;overflow:hidden}
+#stage{position:relative;overflow:hidden;background:#000;--ar:2.39}
+#stage.free{width:100cqw;height:100cqh}
+#stage.cam{width:min(100cqw,calc(100cqh * var(--ar)));aspect-ratio:var(--ar);outline:1px solid #666}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.fail{padding:24px;color:#e7e4dc;font-size:15px}
+.hud{position:absolute;left:10px;top:8px;pointer-events:none;color:#e8e8e8;text-shadow:0 1px 2px #000;font-size:12px;line-height:1.5}
+.hud b{font-weight:500}
+.hud span{display:block;opacity:.85}
+#hudRec{color:#ff6a55;opacity:1}
+#navG{position:absolute;right:8px;top:8px;width:76px;height:76px;pointer-events:none}
+.timeline{grid-area:tl;--lab:112px;background:var(--head);border-radius:4px;min-width:0;overflow:hidden}
+.thead{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:3px 6px;border-bottom:1px solid var(--line)}
+.thead .tbtn{width:30px;height:28px}
+.tsp{width:8px}
+.lbl{color:var(--mute)}
+.num{width:58px;height:24px;background:var(--field);border:0;border-radius:4px;text-align:center;padding:0 4px}
+.sel2{height:24px;background:var(--btn);border:0;border-radius:4px;padding:0 6px;min-width:0}
+.tlscroll{max-height:200px;overflow:auto;background:var(--area)}
+[data-ws="anim"] .tlscroll{max-height:440px}
+[data-ws="anim"] #vp{height:clamp(240px,40vh,520px)}
+.tlbody{position:relative;--p:0}
+.row{display:grid;grid-template-columns:var(--lab) minmax(0,1fr);height:24px}
+.row:nth-child(odd){background:rgba(255,255,255,.025)}
+.row.rule{height:26px;background:var(--head);cursor:ew-resize}
+.lab{font-size:12px;padding:0 8px;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--head);border:0;border-right:1px solid var(--line);color:var(--fg);text-align:left;min-width:0}
+.row.on .lab{background:var(--accent);color:#fff}
+.row.rule .lab{cursor:default;color:var(--mute)}
+.lane{position:relative;cursor:ew-resize;touch-action:none}
+.tick{position:absolute;top:0;bottom:0;border-left:1px solid rgba(128,128,128,.35)}
+.tick span{position:absolute;left:4px;top:8px;font-size:10px;color:var(--mute)}
+.key{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;transform:rotate(45deg);background:var(--key);border:1px solid #000;padding:0;cursor:grab;touch-action:none}
+.key::after{content:"";position:absolute;inset:-9px}
+.key.sel{background:var(--select)}
+.ph{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--playhead);left:calc(var(--lab) + (100% - var(--lab)) * var(--p));pointer-events:none;z-index:3}
+.ph::after{content:attr(data-f);position:absolute;top:2px;left:50%;transform:translateX(-50%);background:var(--playhead);color:#fff;font-size:11px;padding:1px 6px;border-radius:3px}
+.side{grid-area:side;display:flex;flex-direction:column;gap:3px;min-width:0;min-height:0}
+.outl{flex:0 0 auto;max-height:260px;min-height:140px;overflow:auto;background:var(--area);border-radius:4px}
+.ohead{padding:4px 8px;color:var(--mute);background:var(--head);position:sticky;top:0;font-weight:500}
+.orow{display:flex;align-items:center;gap:6px;min-height:26px;padding:0 6px;border:0;border-radius:0;background:transparent;width:100%;text-align:left}
+.orow .oname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.orow:hover{background:var(--btn)}
+.orow.on{background:var(--accent);color:#fff}
+.orow .eye{width:24px;height:22px;border:0;background:transparent;display:inline-flex;align-items:center;justify-content:center;border-radius:3px;color:inherit;padding:0}
+.orow .eye:hover{background:rgba(255,255,255,.15)}
+.indent1{padding-left:14px}.indent2{padding-left:30px}
+.props{flex:1 1 auto;display:grid;grid-template-columns:36px minmax(0,1fr);min-height:340px;background:var(--area);border-radius:4px;overflow:hidden}
+.ptabs{display:flex;flex-direction:column;gap:2px;padding:4px 2px;background:var(--head);overflow-y:auto;min-height:0}.ptabs button{flex:0 0 auto}
+.ptabs button{width:32px;height:32px;border:0;border-radius:4px;background:transparent;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.ptabs button:hover{background:var(--btn)}
+.ptabs button.on{background:var(--btn-hi);color:var(--fg);box-shadow:inset 2px 0 0 var(--accent)}
+.ptabs button:disabled{opacity:.3;cursor:not-allowed}
+.pbody{overflow:auto;padding:6px;max-height:640px}
+.pane{display:flex;flex-direction:column}
+details.pnl{background:var(--head);border-radius:4px;margin-bottom:4px}
+details.pnl>summary{list-style:none;cursor:pointer;min-height:26px;display:flex;align-items:center;gap:7px;padding:0 8px;font-weight:600;background:var(--panel-h);border-radius:4px}
+details.pnl>summary::-webkit-details-marker{display:none}
+details.pnl>summary::before{content:"";border:4px solid transparent;border-left:6px solid currentColor;margin-right:2px}
+details.pnl[open]>summary::before{border:4px solid transparent;border-top:6px solid currentColor;border-bottom:0;margin-top:3px}
+.pc{padding:8px;display:flex;flex-direction:column;gap:6px}
+.prow{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;align-items:center}
+.prow>label{color:var(--mute)}
+.xyz{display:flex;flex-direction:column;gap:1px}
+.xyz label{display:flex;align-items:center;background:var(--btn);height:24px}
+.xyz label:first-child{border-radius:4px 4px 0 0}.xyz label:last-child{border-radius:0 0 4px 4px}
+.xyz label span{width:22px;text-align:center;color:var(--mute);font-size:11px}
+.xyz input{flex:1;min-width:0;height:100%;border:0;background:transparent;text-align:right;padding:0 8px}
+.fld{position:relative;height:24px;background:var(--btn);border-radius:4px;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 9px}
+.fld i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);pointer-events:none}
+.fld span,.fld output{position:relative;pointer-events:none;white-space:nowrap}
+.fld input[type=range]{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize}
+.fld:focus-within{outline:2px solid var(--accent-hi);outline-offset:1px}
+.txt{height:24px;background:var(--field);border:0;border-radius:4px;padding:0 8px;width:100%}
+.pbtn{min-height:26px;background:var(--btn);border:0;border-radius:4px;padding:0 10px}
+.fpick{position:relative;display:inline-flex;align-items:center;overflow:hidden;cursor:pointer}
+.fpick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:16px;cursor:pointer}
+.pbtn:hover{background:var(--btn-hi)}
+.pbtn.on,.pbtn.hi{background:var(--accent);color:#fff}
+.pbtn:disabled{opacity:.4}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.chkr{display:flex;align-items:center;gap:8px;min-height:24px}
+.chkr input{width:16px;height:16px;accent-color:var(--accent)}
+.note{color:var(--mute);margin:0;font-size:12px}
+.bar-prog{height:8px;background:var(--field);border-radius:4px;overflow:hidden}
+.bar-prog i{display:block;height:100%;width:0;background:var(--accent)}
+#expVideo{width:100%;max-height:240px;background:#000;border-radius:4px}
+.b-stat{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:3px 10px;color:var(--mute);font-size:11px;background:var(--head);border-radius:4px}
+.ta{width:100%;background:var(--field);border:0;border-radius:4px;padding:6px 8px;resize:vertical;min-height:68px;font:inherit;color:var(--fg)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chips .pbtn{min-height:24px;font-size:12px;padding:0 8px}
+.log{max-height:170px;overflow:auto;background:var(--field);border-radius:4px;padding:6px 8px;font-size:12px;white-space:pre-wrap;word-break:break-word;min-height:34px}
+.thumbs{display:flex;flex-wrap:wrap;gap:6px}
+.att{display:flex;align-items:center;gap:6px;background:var(--field);border-radius:4px;padding:3px 3px 3px 3px;max-width:100%}
+.att img{width:38px;height:38px;object-fit:cover;border-radius:3px}
+.att span{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.att button{border:0;background:transparent;width:24px;height:24px;font-size:16px;line-height:1}
+.popup{position:fixed;z-index:30;min-width:200px;max-width:92vw;background:var(--pop);border:1px solid #000;border-radius:6px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.popup button{display:flex;justify-content:space-between;gap:28px;width:100%;min-height:28px;align-items:center;padding:0 10px;border:0;background:transparent;border-radius:4px;text-align:left}
+.popup button:hover{background:var(--accent);color:#fff}
+.popup .k{color:var(--mute);font-size:11px}
+.popup button:hover .k{color:#dbe6f7}
+.popup .sep{height:1px;background:var(--line);margin:4px 2px;opacity:.6}
+.popup .info{padding:3px 10px;color:var(--mute);font-size:12px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--win);padding:9px 16px;border-radius:6px;font-size:13px;z-index:40;max-width:90vw}
+.hide-side .side{display:none}
+.hide-side .b-body{grid-template-columns:38px minmax(0,1fr)}
+.hide-tl .timeline{display:none}
+@media (pointer:coarse){
+  .mbtn,.wsp button{height:34px}.tbtn{width:38px;height:38px}.hbtn{height:34px;min-width:36px}.fld{height:32px}.sel2,.num{height:32px}
+  .pbtn{min-height:34px}.orow{min-height:34px}.xyz label{height:32px}.popup button{min-height:38px}.ptabs button{width:34px;height:36px}
+}
+@media (max-width:900px){
+  .b-body{grid-template-columns:minmax(0,1fr);grid-template-areas:"tool" "vp" "tl" "side"}
+  .tools{flex-direction:row;align-self:stretch;overflow-x:auto}
+  .tools .sepv{width:1px;height:auto;margin:2px 3px}
+  .outl{max-height:220px}.props{min-height:380px}
+  .wsp{margin-left:4px}
+  .hide-side .b-body{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<div class="blender" id="app" data-ws="layout">
+  <div class="b-top">
+    <span class="logo" aria-hidden="true"><svg width="22" height="20" viewBox="0 0 22 20"><circle cx="11" cy="11" r="6.2" fill="none" stroke="#ea7600" stroke-width="3"/><circle cx="11" cy="11" r="2" fill="#ea7600"/><path d="M3 10l8-6 5 2" stroke="#ea7600" stroke-width="3" fill="none" stroke-linecap="round"/></svg></span>
+    <button class="mbtn" data-menu="file" type="button">File</button>
+    <button class="mbtn" data-menu="edit" type="button">Edit</button>
+    <button class="mbtn" data-menu="render" type="button">Render</button>
+    <button class="mbtn" data-menu="window" type="button">Window</button>
+    <button class="mbtn" data-menu="help" type="button">Help</button>
+    <div class="wsp" id="wsp" role="group" aria-label="Workspace"><button data-ws="layout" class="on" type="button">Layout</button><button data-ws="anim" type="button">Animation</button><button data-ws="render" type="button">Rendering</button></div>
+    <div class="b-sp"></div>
+    <span class="scene-name">Scene</span>
+  </div>
+  <div class="b-body">
+    <div class="tools" id="tools" role="toolbar" aria-label="Tools"></div>
+    <section class="viewport">
+      <div class="vhead" id="vhead">
+        <span class="vmode">Object Mode</span>
+        <button class="mbtn" data-menu="vview" type="button">View</button>
+        <button class="mbtn" data-menu="vadd" type="button">Add</button>
+        <button class="mbtn" data-menu="vobj" type="button">Object</button>
+        <span class="hsp"></span>
+        <button class="hbtn on" id="shD" type="button" title="Solid: fast preview" aria-label="Solid preview"></button>
+        <button class="hbtn" id="shF" type="button" title="Material Preview: shadows, depth of field" aria-label="Material preview"></button>
+      </div>
+      <div id="vp">
+        <div id="stage" class="free"></div>
+        <div class="hud"><span><b id="hudA">User Perspective</b></span><span id="hudB">(0) Collection</span><span id="hudRec" hidden>&#9679; Rendering</span></div>
+        <canvas id="navG" width="152" height="152" aria-hidden="true"></canvas>
+      </div>
+    </section>
+    <section class="timeline" id="timeline">
+      <div class="thead">
+        <button class="tbtn" id="tStart" type="button" title="Jump to start" aria-label="Jump to start"></button>
+        <button class="tbtn" id="tPrevKey" type="button" title="Previous keyframe" aria-label="Previous keyframe"></button>
+        <button class="tbtn on" id="tPlay" type="button" title="Play (Space)" aria-label="Play"></button>
+        <button class="tbtn" id="tNextKey" type="button" title="Next keyframe" aria-label="Next keyframe"></button>
+        <button class="tbtn" id="tEnd" type="button" title="Jump to end" aria-label="Jump to end"></button>
+        <span class="tsp"></span>
+        <button class="tbtn" id="tRec" type="button" title="Auto Keying" aria-label="Auto keying"></button>
+        <button class="tbtn" id="tLoop" type="button" title="Loop playback" aria-label="Loop playback"></button>
+        <span class="tsp"></span>
+        <label class="lbl" for="tCur">Frame</label><input class="num" id="tCur" type="number" min="0" step="1" value="0">
+        <label class="lbl" for="tStartF">Start</label><input class="num" id="tStartF" type="number" value="0" readonly>
+        <label class="lbl" for="tEndF">End</label><input class="num" id="tEndF" type="number" min="24" step="1" value="192">
+        <label class="lbl" for="selEase">Easing</label><select class="sel2" id="selEase"><option value="inout">Ease in-out</option><option value="linear">Linear</option><option value="in">Ease in</option><option value="out">Ease out</option></select>
+        <button class="pbtn" id="bKey" type="button">Insert Keyframe</button>
+        <button class="pbtn" id="bDelKey" type="button">Delete Keyframe</button>
+      </div>
+      <div class="tlscroll"><div class="tlbody" id="tlbody"></div></div>
+    </section>
+    <aside class="side">
+      <div class="outl"><div class="ohead">Outliner</div><div id="outliner"></div></div>
+      <div class="props">
+        <div class="ptabs" id="ptabs" role="tablist" aria-label="Properties"></div>
+        <div class="pbody">
+          <div class="pane" id="pTool" hidden></div>
+          <div class="pane" id="pRender" hidden></div>
+          <div class="pane" id="pOutput" hidden>
+            <details class="pnl" open><summary>Format</summary><div class="pc">
+              <div class="prow"><label for="selAspect">Frame</label><select class="sel2" id="selAspect"><option value="2.39">2.39:1 Scope</option><option value="1.85">1.85:1 Flat</option><option value="1.7778">16:9</option><option value="0.5625">9:16</option></select></div>
+              <div class="prow"><label for="selRes">Resolution</label><select class="sel2" id="selRes"><option value="720">720 short side</option><option value="1080">1080 short side</option></select></div>
+              <div class="prow"><label for="selFps">Frame Rate</label><select class="sel2" id="selFps"><option value="24">24 fps</option><option value="30">30 fps</option></select></div>
+            </div></details>
+            <details class="pnl" open><summary>Render Animation</summary><div class="pc">
+              <button class="pbtn hi" id="bRender" type="button">Render Animation</button>
+              <div class="bar-prog"><i id="expBar"></i></div>
+              <p class="note" id="expMsg">Records the camera view in real time with Material Preview quality. Keep this tab open until it finishes.</p>
+              <video id="expVideo" controls playsinline hidden></video>
+              <button class="pbtn" id="bSave" type="button" hidden>Save Video</button>
+            </div></details>
+          </div>
+          <div class="pane" id="pWorld" hidden></div>
+          <div class="pane" id="pObject" hidden></div>
+          <div class="pane" id="pData" hidden></div>
+          <div class="pane" id="pMat" hidden></div>
+          <div class="pane" id="pAi" hidden></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <footer class="b-stat"><span id="stL">Build 98. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
+</div>
+<input type="file" id="glbIn" hidden>
+<div id="popup" class="popup" hidden></div>
+<div id="toast" class="toast" hidden></div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/BokehShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/BokehPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+<script>
