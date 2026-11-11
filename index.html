@@ -244,7 +244,7 @@ details.pnl[open]>summary::before{border:4px solid transparent;border-top:6px so
       </div>
     </aside>
   </div>
-  <footer class="b-stat"><span id="stL">Build 99. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
+  <footer class="b-stat"><span id="stL">Build 100. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
 </div>
 <input type="file" id="glbIn" hidden>
 <div id="popup" class="popup" hidden></div>
@@ -2250,6 +2250,54 @@ function faceMenu(){ return [
 const CR_DEF={name:'New character',bodyType:'masculine',height:1.75,build:1,shoulders:1,head:1,waist:1,hips:1,chest:1,bust:1,skin:'#c8946b',hair:'short',hairColor:'#1d1511',shirt:'#3f6fb0',pants:'#2b2f3a',shoes:'#1a1a1a',eyes:'#4a3020',brow:'#1d1511',beard:'none',glasses:'none',top:'tee',backpack:'no',fit:1,shoeStyle:'plain'};
 const CR_VIS=[[0,1,0],[1,1.05,0],[.5,1.25,0],[.3,1.35,0],[.65,.9,.8],[.35,.8,1],[.12,1.2,0],[0,1,0]];   /* open, width, round per viseme code */
 function crMat(c,r,m){ return new THREE.MeshStandardMaterial({color:lin(c),roughness:r==null?.7:r,metalness:m||0}); }
+function crMakeTorsoMesh(root,bones,boneList,H,B,SH,waistW,hipW,chestW,bust,mat){
+  /* One continuous, smooth torso surface. Four-bone skin weights let the waist and chest deform with the existing rig. */
+  const profiles=[
+    [.485,.086,.064,1], [.505,.103*hipW,.071,1], [.535,.112*hipW,.074,1],
+    [.565,.112*waistW,.073,1], [.615,.116*waistW,.077,1], [.655,.129*B*SH,.083,1],
+    [.700,.145*B*SH*chestW,.089*(1+.035*bust),1], [.742,.151*B*SH*chestW,.091*(1+.075*bust),1],
+    [.775,.137*B*SH*chestW,.078,1], [.802,.088*SH,.057,1]
+  ];
+  const radial=32, positions=[],uvs=[],indices=[],skinIndices=[],skinWeights=[];
+  const idx={hips:boneList.indexOf(bones.hips),spine:boneList.indexOf(bones.spine),chest:boneList.indexOf(bones.chest),neck:boneList.indexOf(bones.neck)};
+  profiles.forEach((pr,ri)=>{
+    const [y,rx,rz]=pr;
+    for(let j=0;j<radial;j++){
+      const a=j/radial*Math.PI*2, sn=Math.sin(a),cs=Math.cos(a);
+      positions.push(Math.cos(a)*rx*H, y*H, Math.sin(a)*rz*H);
+      uvs.push(j/radial,ri/(profiles.length-1));
+      let aBone,bBone,t;
+      if(y<.565){aBone='hips';bBone='spine';t=Math.max(0,Math.min(1,(y-.535)/.03));}
+      else if(y<.70){aBone='spine';bBone='chest';t=Math.max(0,Math.min(1,(y-.615)/.085));}
+      else {aBone='chest';bBone='neck';t=Math.max(0,Math.min(1,(y-.742)/.06));}
+      const smooth=t*t*(3-2*t);
+      skinIndices.push(idx[aBone],idx[bBone],0,0); skinWeights.push(1-smooth,smooth,0,0);
+    }
+  });
+  for(let r=0;r<profiles.length-1;r++) for(let j=0;j<radial;j++){
+    const a=r*radial+j,b=r*radial+(j+1)%radial,c=(r+1)*radial+(j+1)%radial,d=(r+1)*radial+j;
+    /* outward-facing winding */ indices.push(a,d,b,b,d,c);
+  }
+  const bottom=positions.length/3, top=bottom+1;
+  positions.push(0,profiles[0][0]*H,0, 0,profiles[profiles.length-1][0]*H,0);
+  uvs.push(.5,0,.5,1);
+  skinIndices.push(idx.hips,idx.spine,0,0,idx.chest,idx.neck,0,0);
+  skinWeights.push(1,0,0,0,1,0,0,0);
+  for(let j=0;j<radial;j++){
+    const a=j,b=(j+1)%radial,ta=(profiles.length-1)*radial+j,tb=(profiles.length-1)*radial+(j+1)%radial;
+    indices.push(bottom,b,a,top,ta,tb);
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+  geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(skinIndices,4));
+  geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(skinWeights,4));
+  geo.setIndex(indices); geo.computeVertexNormals();
+  const mesh=new THREE.SkinnedMesh(geo,mat); mesh.name='Unified torso'; mesh.castShadow=true; mesh.receiveShadow=true; mesh.userData.paint=true; mesh.userData.rigOwned=true; mesh.userData.unifiedBodyPart='torso';
+  root.add(mesh); root.updateMatrixWorld(true);
+  const skeleton=new THREE.Skeleton(boneList); mesh.bind(skeleton); mesh.normalizeSkinWeights();
+  return mesh;
+}
 
 /* ---- fingers: chains of segments under each hand, curled by pose keys hand.L.a / hand.L.b ---- */
 const CR_FDEF=[{n:'thumb',b:[-.011,.462,.013],L:[.016,.013],r:.0049,rx:-.6},{n:'index',b:[0,.421,.0128],L:[.017,.011,.009],r:.0042},{n:'middle',b:[0,.421,.0045],L:[.019,.012,.010],r:.0044},{n:'ring',b:[0,.421,-.0045],L:[.017,.011,.009],r:.0042},{n:'pinky',b:[0,.422,-.0128],L:[.013,.009,.008],r:.0036}];
@@ -2291,11 +2339,9 @@ function crBuild(node,spec){
   const loc=(bn,w)=>[w[0]*H-head[bn][0],w[1]*H-head[bn][1],w[2]*H-head[bn][2]];
   const seg=(par,bn,a,b,r0,r1,m)=>{ const A=new THREE.Vector3(...a.map(v=>v*H)), Bv=new THREE.Vector3(...b.map(v=>v*H)), dir=Bv.clone().sub(A), len=dir.length(), g=new THREE.CylinderGeometry(r1*H,r0*H,len,14,1); const me=new THREE.Mesh(g,m); me.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.normalize()); const mid=A.add(Bv).multiplyScalar(.5); me.position.set(mid.x-head[bn][0],mid.y-head[bn][1],mid.z-head[bn][2]); return add(par,me); };
   const ell=(par,bn,w,r,m,seg1)=>{ const me=new THREE.Mesh(new THREE.SphereGeometry(1,seg1||18,14),m); me.scale.set(r[0]*H,r[1]*H,r[2]*H); const l=loc(bn,w); me.position.set(l[0],l[1],l[2]); return add(par,me); };
-  /* torso */
-  ell(holder.hips,'hips',[0,.53,0],[.108*B*SH*hipW,.07,.075*B],pants);
-  ell(holder.spine,'spine',[0,.64,0],[.122*B*SH*waistW,.08,.08*B],cloth);
-  ell(holder.chest,'chest',[0,.745,0],[.158*B*SH*chestW,.088,.09*B],cloth);
-  if(feminine&&o.top!=='hoodie'){ const bust=Math.max(.55,Math.min(1.45,+o.bust||1)); [-1,1].forEach(side=>ell(holder.chest,'chest',[side*.046,.708,.072],[.034*bust,.024*bust,.02*bust],cloth,18)); }
+  /* unified torso: a single skinned surface replaces the disconnected hip, waist and chest ellipsoids */
+  const bust=Math.max(.55,Math.min(1.45,+o.bust||1));
+  const torsoMesh=crMakeTorsoMesh(root,bones,list,H,B,SH,waistW,hipW,chestW,bust,cloth);
   seg(bones.neck,'neck',[0,.795,0],[0,.88,.008],.03,.026,skin);
   const fingers={L:null,R:null};
   /* legs, arms (shirt sleeves to the elbow, skin below) */
@@ -2415,7 +2461,7 @@ function crBuild(node,spec){
       ell(holder.chest,'chest',[x*.98,.7,.104*B],[.012,.008,.004],crMat('#2a2a2a',.4),8); });
   }
   root.updateMatrixWorld(true);
-  node.userData.rig={bones:bones,markers:markers,showObjs:markers.concat(lines),H:H,L:null,creator:{fingers:fingers,jaw:jaw,eyes:eyes,lids:lids,brows:brows,corners:corner,upL:upL,loL:loL,holder:holder,jawMax:.42,ph:(spec.name||'x').length*1.7}};
+  node.userData.rig={bones:bones,markers:markers,showObjs:markers.concat(lines),H:H,L:null,creator:{fingers:fingers,jaw:jaw,eyes:eyes,lids:lids,brows:brows,corners:corner,upL:upL,loL:loL,holder:holder,torso:torsoMesh,jawMax:.42,ph:(spec.name||'x').length*1.7}};
   markers.concat(lines).forEach(m=>{ m.visible=false; });
   node.userData.spec=spec; if(spec.pose) rigApply(node); else crFingers(node.userData.rig,{});
 }
@@ -5900,7 +5946,7 @@ async function chatRun(d){
   if($('#selAspect').value!==String(S.aspect)) $('#selAspect').value='2.39';
   applyLook(); refreshLook(); applyQuality(); setView('free'); setMode('translate');
   applyTracks(0); renderTimeline(); renderOutliner(); renderProps(); showTab('render'); fit(); rebuildEnv();
-  $('#stL').textContent='Build 99 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
+  $('#stL').textContent='Build 100 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
   try{ if(location.hash==='#dev') window.__dev={S,nodes,scene,edit,cinema,orbit,renderer,THREE,get:id=>nodes.get(id),sc:{scRefine,scSetTopo,scAdj,scUpdate}}; }catch(e){}
   try{ loadEmbedded(); }catch(e){}
   try{ if(!saved&&!localStorage.getItem('slate-welcome-v1')){ localStorage.setItem('slate-welcome-v1','1'); setTimeout(showWelcome,500); } }catch(e){ if(!saved) setTimeout(showWelcome,500); }
