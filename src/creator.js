@@ -149,7 +149,7 @@ function crMakeLimbShell(root,bones,boneList,H,B,SH,feminine,hood,fit,cloth,skin
     /* Build 126: transition volumes at the major limb junctions. These are
        deliberately small and overlap the adjacent shells to soften visible
        pinching at shoulder, elbow, wrist, hip, knee and ankle bends. */
-    ellipsoid([sx,.785,0],[.044*SH,.052*B,.040*B],'upperArm'+k,0,20,14);
+    ellipsoid([sx,.785,0],[.036*SH,.043*B,.032*B],'upperArm'+k,0,24,16);
     ellipsoid([ex,.642,0],[.031*B,.034*B,.031*B],'foreArm'+k,hood?0:1,18,12);
     ellipsoid([wx,.505,0],[.022*B,.021*B,.022*B],'hand'+k,1,16,12);
     ellipsoid([lx,.505,0],[.050*B*F,.044*B*F,.047*B*F],'upperLeg'+k,2,20,14);
@@ -284,17 +284,80 @@ function crBuild(node,spec){
   const upL=new THREE.Mesh(new THREE.SphereGeometry(1,12,8),lipM); upL.scale.set(.018*H,.0045*H,.006*H); l=loc('head',[0,ym+.002,zS(ym)+.0005]); upL.position.set(l[0],l[1],l[2]); add(holder.head,upL);
   const loL=new THREE.Mesh(new THREE.SphereGeometry(1,12,8),lipM); loL.scale.set(.017*H,.0048*H,.006*H); loL.position.set(0,-.003*H,(zS(ym)-jh[2])*H); add(jaw,loL);
   const corner=[1,-1].map(s=>{ const c=new THREE.Mesh(new THREE.SphereGeometry(1,8,6),lipM); c.scale.set(.004*H,.004*H,.004*H); l=loc('head',[s*.019,ym,zS(ym)-.002]); c.position.set(l[0],l[1],l[2]); c.userData.p0=c.position.clone(); c.userData.s=s; add(holder.head,c); return c; });
+
+  /* Build 139: subtle mandibular transition and neck-base shaping.
+     These low-profile forms soften the spherical head/jaw and straight-neck join. */
+  ell(holder.head,'head',[0,.900,zS(.900)-.002],[.027,.010,.009],skin,24);
+  ell(holder.head,'head',[0,.868,-.002],[.034,.018,.030],skin,24);
+
   /* Build 109: layered nose and cheek/chin forms refine the front silhouette. */
   ell(holder.head,'head',[0,.936,zS(.936)+.004],[.0062,.020,.0072],skin,16);       /* bridge */
   ell(holder.head,'head',[0,.918,zS(.918)+.010],[.009,.0075,.009],skin,16);       /* tip */
   const noseWingMat=skin;
   [1,-1].forEach(s=>{
-    ell(holder.head,'head',[s*.008,.916,zS(.916)+.006],[.0058,.0048,.0065],noseWingMat,12);
+    ell(holder.head,'head',[s*.0072,.916,zS(.916)+.006],[.0046,.0038,.0050],noseWingMat,16);
     ell(holder.head,'head',[s*.0052,.9125,zS(.9125)+.010],[.0019,.0012,.0011],dark,10);
-    ell(holder.head,'head',[s*.029,.922,zS(.922)-.001],[.014,.011,.008],skin,16); /* cheek */
+    ell(holder.head,'head',[s*.0275,.922,zS(.922)-.001],[.0105,.0085,.0058],skin,20); /* softened cheek plane */
   });
-  { const w=[0,.893,zS(.893)+.002], me=new THREE.Mesh(new THREE.SphereGeometry(1,16,14),skin); me.scale.set(.018*H,.008*H,.008*H); me.position.set((w[0]-jh[0])*H,(w[1]-jh[1])*H,(w[2]-jh[2])*H); add(jaw,me); }               /* chin pad */
+  { const w=[0,.893,zS(.893)+.002], me=new THREE.Mesh(new THREE.SphereGeometry(1,20,14),skin); me.scale.set(.015*H,.0065*H,.0065*H); me.position.set((w[0]-jh[0])*H,(w[1]-jh[1])*H,(w[2]-jh[2])*H); add(jaw,me); }            /* blended chin plane */
   [1,-1].forEach(s=>ell(holder.head,'head',[s*.0505*HD,.935,0],[.006,.016,.011],skin,12));
+
+  /* Build 138: refine the nose silhouette with subtle bridge highlights,
+     alar rims, nostril shadows and a small columella transition. */
+  const noseRimMat=new THREE.MeshStandardMaterial({color:o.skin,roughness:.78});
+  const noseShadowMat=new THREE.MeshStandardMaterial({color:0x49352f,roughness:.95});
+  const noseHighlightMat=new THREE.MeshStandardMaterial({color:0xe5c2a7,roughness:.72});
+  for(const side of [-1,1]){
+    ell(holder.head,'head',[side*.0028,.932,zS(.932)+.010],
+      [.00115,.012,.0010],noseHighlightMat,10);
+    ell(holder.head,'head',[side*.0074,.9148,zS(.9148)+.0102],
+      [.0035,.0020,.00145],noseRimMat,12);
+    ell(holder.head,'head',[side*.0063,.9136,zS(.9136)+.0108],
+      [.00215,.00078,.00062],noseShadowMat,12);
+  }
+  ell(holder.head,'head',[0,.9138,zS(.9138)+.0112],
+    [.0019,.0025,.0012],noseRimMat,10);
+  ell(holder.head,'head',[0,.9225,zS(.9225)+.014],
+    [.0020,.0055,.0010],noseHighlightMat,10);
+
+
+  /* Build 143: facial topology guide surfaces.
+     These shallow edge-loop contours sit close to the face surface and clarify
+     orbital and perioral transitions while remaining attached to the head rig. */
+  const faceLoopMat=new THREE.MeshStandardMaterial({color:o.skin,roughness:.82});
+  const lipEdgeMat=new THREE.MeshStandardMaterial({color:0x9b5550,roughness:.72});
+  const addFaceLoop=(points,radius,material)=>{
+    const pts=points.map(v=>{const q=loc('head',v);return new THREE.Vector3(q[0],q[1],q[2]);});
+    const curve=new THREE.CatmullRomCurve3(pts,true);
+    const mesh=new THREE.Mesh(new THREE.TubeGeometry(curve,Math.max(32,points.length*4),radius*H,5,true),material);
+    mesh.castShadow=true; mesh.receiveShadow=true; mesh.userData.rigOwned=true; holder.head.add(mesh);
+  };
+  /* Orbital loops follow the upper cheek and brow region, not the eyeball. */
+  for(const side of [-1,1]){
+    const cx=side*.020*HD, cy=.946;
+    const orbit=[];
+    for(let k=0;k<24;k++){
+      const a=k/24*Math.PI*2;
+      const x=cx+Math.cos(a)*.0130;
+      const y=cy+Math.sin(a)*.0092;
+      orbit.push([x,y,zS(y)+.0018]);
+    }
+    addFaceLoop(orbit,.00042,faceLoopMat);
+  }
+  /* Perioral loop defines the transition around the mouth; a second curve
+     traces the vermilion border without replacing the existing lip rig. */
+  const mouthOuter=[], mouthInner=[];
+  for(let k=0;k<24;k++){
+    const a=k/24*Math.PI*2;
+    const x=Math.cos(a)*.020;
+    const y=ym+Math.sin(a)*.010;
+    mouthOuter.push([x,y,zS(y)+.0018]);
+    const xi=Math.cos(a)*.0175, yi=ym+Math.sin(a)*.0054;
+    mouthInner.push([xi,yi,zS(yi)+.0042]);
+  }
+  addFaceLoop(mouthOuter,.00036,faceLoopMat);
+  addFaceLoop(mouthInner,.00025,lipEdgeMat);
+
   /* eyes, lids, brows */
   const eyeW=new THREE.MeshStandardMaterial({color:0xece8e0,roughness:.19}), iris=crMat(o.eyes,.3), pup=new THREE.MeshBasicMaterial({color:0x050505});
   const limbal=new THREE.MeshBasicMaterial({color:0x24170f}), pupilRim=new THREE.MeshBasicMaterial({color:0x39251b});
@@ -311,8 +374,55 @@ function crBuild(node,spec){
     const hi2=new THREE.Mesh(new THREE.CircleGeometry(1,12),glint); hi2.scale.set(.00055*H,.00055*H,1); hi2.position.set(.0020*H,-.0018*H,.01061*H); add(eb,hi2);
     const lb=new THREE.Bone(); lb.name='lid'+(s>0?'.L':'.R'); lb.position.copy(eb.position); holder.head.add(lb); lids.push(lb);
     const lm=new THREE.Mesh(new THREE.SphereGeometry(1,16,10,0,Math.PI*2,0,Math.PI*.52),capMat); lm.scale.set(.0122*H,.0122*H,.0122*H); add(lb,lm);
+    /* Build 137: fine upper/lower eyelid rims and restrained upper lashes.
+       These details are parented to the eye bone so eye direction stays aligned. */
+    const lidRim=new THREE.MeshStandardMaterial({color:0x765044,roughness:.82});
+    const lashMat=new THREE.MeshStandardMaterial({color:o.brow,roughness:.88});
+    const lidPoint=(x,y,offset)=>{
+      const xx=x*H, yy=y*H, rr=.0105*H;
+      const zz=Math.sqrt(Math.max(.000001,rr*rr-xx*xx-yy*yy))+offset*H;
+      return new THREE.Vector3(xx,yy,zz);
+    };
+    const upperPts=[], lowerPts=[];
+    for(let k=0;k<=16;k++){
+      const u=-1+k/8, x=u*.0090;
+      const arch=Math.sqrt(Math.max(0,1-u*u));
+      upperPts.push(lidPoint(x,.0010*arch+.0011*(1-Math.abs(u)),.00022));
+      lowerPts.push(lidPoint(x,-.00045*arch-.0010*(1-Math.abs(u)),.00018));
+    }
+    const upperCurve=new THREE.CatmullRomCurve3(upperPts);
+    const lowerCurve=new THREE.CatmullRomCurve3(lowerPts);
+    const upperRim=new THREE.Mesh(new THREE.TubeGeometry(upperCurve,36,.00034*H,5,false),lidRim);
+    const lowerRim=new THREE.Mesh(new THREE.TubeGeometry(lowerCurve,36,.00024*H,5,false),lidRim);
+    upperRim.castShadow=true; lowerRim.castShadow=true; add(eb,upperRim); add(eb,lowerRim);
+    /* Short individual lash strokes, concentrated along the outer half. */
+    for(let k=0;k<7;k++){
+      const u=.05+k*.135, x=u*.0090, y=.0010*Math.sqrt(Math.max(0,1-u*u))+.0011*(1-Math.abs(u));
+      const a=lidPoint(x,y,.00028), b=lidPoint(x+.00055,y+.00072,.00034);
+      const lash=new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(a,b),4,.00013*H,4,false),lashMat);
+      add(eb,lash);
+    }
     const bb=new THREE.Bone(); bb.name='brow'+(s>0?'.L':'.R'); bb.position.set(...loc('head',[ex,ey+.0178,zS(ey+.0178)])); bb.userData.p0=bb.position.clone(); holder.head.add(bb); brows.push(bb);
-    const bm=new THREE.Mesh(new THREE.BoxGeometry(.026*H,.0042*H,.004*H),crMat(o.brow,.8)); bm.position.z=.0005*H; add(bb,bm); });
+    /* Arched brow volume follows the brow bone, with tapered ends and
+       fine directional strokes for a less block-like facial silhouette. */
+    const browMat=crMat(o.brow,.86), browHi=new THREE.MeshStandardMaterial({color:o.brow,roughness:.92});
+    const browPts=[
+      new THREE.Vector3(-.0145*H,-.0010*H,.00045*H),
+      new THREE.Vector3(-.0090*H,.0020*H,.0011*H),
+      new THREE.Vector3(-.0020*H,.0032*H,.00145*H),
+      new THREE.Vector3(.0060*H,.0025*H,.0011*H),
+      new THREE.Vector3(.0135*H,-.0010*H,.00035*H)
+    ];
+    const browCurve=new THREE.CatmullRomCurve3(browPts);
+    const browMesh=new THREE.Mesh(new THREE.TubeGeometry(browCurve,28,.00135*H,7,false),browMat);
+    browMesh.castShadow=true; browMesh.receiveShadow=true; add(bb,browMesh);
+    for(let k=0;k<7;k++){
+      const u=.12+k*.125, a=browCurve.getPoint(u), b=browCurve.getPoint(Math.min(.98,u+.055));
+      a.z+=.00035*H; b.z+=.0004*H;
+      const strand=new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(a,b),4,.00020*H,4,false),browHi);
+      add(bb,strand);
+    }
+  });
   /* hair */
   if(o.hair!=='none'){ const hr=new THREE.Mesh(new THREE.SphereGeometry(1,28,16,0,Math.PI*2,0,Math.PI*(o.hair==='cap'?.34:.42)),hairM); hr.scale.set(R3[0]*H*1.06,R3[1]*H*1.04,R3[2]*H*1.07); l=loc('head',[0,HC[1]+.002,HC[2]-.003]); hr.position.set(l[0],l[1],l[2]); hr.rotation.x=-.12; add(holder.head,hr);
     if(o.hair==='long'||o.hair==='ponytail'){ const lg=new THREE.Mesh(new THREE.SphereGeometry(1,16,12),hairM); lg.scale.set(R3[0]*H*1.05,.095*H,R3[2]*H*.8); l=loc('head',[0,.89,-.028]); lg.position.set(l[0],l[1],l[2]); add(holder.head,lg); }
@@ -362,7 +472,7 @@ function crBuild(node,spec){
     if(o.hair==='long'){
       /* Back curtain adds a fuller, tapered long-hair silhouette behind the neck. */
       const backHair=piece(ico1,hd([0,.884,-.038]),[.038*H,.105*H,.018*H],[0,0,0]);
-      backHair.castShadow=true; backHair.receiveShadow=true; add(holder.head,backHair);
+      backHair.castShadow=true; backHair.receiveShadow=true; add(holder.head,new THREE.Mesh(backHair,hairM));
       [-1,1].forEach(side=>{
         const pts=[
           [side*.034,.963,.034],[side*.039,.941,.036],
@@ -507,7 +617,7 @@ function crBuild(node,spec){
     for(const side of [-1,1]){
       const temple=piece(ico1,hd([side*.036,.944,-.004]),
         [.010*H,.027*H,.008*H],[0,0,side*.10]);
-      temple.castShadow=true; temple.receiveShadow=true; add(holder.head,temple);
+      temple.castShadow=true; temple.receiveShadow=true; add(holder.head,new THREE.Mesh(temple,hairM));
       addSideLine([
         [side*.033,.967,.022],[side*.039,.948,.014],
         [side*.041,.927,-.004],[side*.039,.907,-.018]
@@ -528,7 +638,7 @@ function crBuild(node,spec){
       /* Small nape mass blends the side panels into the rear hair silhouette. */
       const nape=piece(ico1,hd([0,.858,-.031]),
         [.031*H,.030*H,.012*H],[0,0,0]);
-      nape.castShadow=true; nape.receiveShadow=true; add(holder.head,nape);
+      nape.castShadow=true; nape.receiveShadow=true; add(holder.head,new THREE.Mesh(nape,hairM));
       for(let j=-2;j<=2;j++){
         const x=j*.010;
         addSideLine([[x,.884,-.037],[x*.92,.864,-.044],[x*.72,.846,-.040]],
@@ -690,5 +800,6 @@ function crPanel(){
 
 const CR_JESVIN={name:'Jesvin',height:1.74,build:.92,shoulders:1,head:1.04,skin:'#94654a',hair:'curly',hairColor:'#18120e',brow:'#140e0b',eyes:'#2b1b12',beard:'full',glasses:'round',top:'hoodie',shirt:'#4d4a2c',pants:'#4a6188',fit:1.28,shoes:'#ebe7de',shoeStyle:'sneaker',shoeAccent:'#4f5f3d',backpack:'yes',bagColor:'#5f7247'};
 function loadJesvinRig(){ const sp=crAddNode(CR_JESVIN); toast('Jesvin added with a full body, finger and face rig. Pose him in Rig and pose, or Face and hands.'); return sp; }
+
 window.__cr={add:crAddNode,rebuild:crRebuild,def:CR_DEF};
 window.__cr.frame=function(nm,d,hh){ hh=hh||.95; nodes.forEach(n=>{ if(n.userData.name===nm){ const p=n.position; orbit.target.set(p.x,p.y+hh,p.z); edit.position.set(p.x+.25*d,p.y+hh+.12,p.z+d); orbit.update(); } }); };
