@@ -39,6 +39,10 @@ function rigApply(node){
   ['L','R'].forEach(sd=>{ const ub=base['upperArm.'+sd]; if(!ub||(!ub[0]&&!ub[1]&&!ub[2])) return; _rgE.set(ub[0],ub[1],ub[2]); _rgB.setFromEuler(_rgE); _rgBi.copy(_rgB).invert();
     ['foreArm.'+sd,'hand.'+sd].forEach(n=>{ const e=pose[n]; if(!e||base[n]) return; _rgE.set(e[0],e[1],e[2]); _rgC.setFromEuler(_rgE); R.bones[n].quaternion.copy(_rgBi).multiply(_rgC).multiply(_rgB); }); });
   if(R.creator&&R.creator.fingers) crFingers(R,pose);
+  if(R.creator&&R.creator.toes) ['L','R'].forEach(sd=>{
+    const vals=pose['toes.'+sd]||[];
+    R.creator.toes[sd].forEach((b,i)=>{ const a=vals[i]||0; b.rotation.x=a; });
+  });
   node.updateMatrixWorld(true);
 }
 function rigPoseSet(node,pose){ node.userData.spec.pose=rigClone(pose); rigApply(node); }

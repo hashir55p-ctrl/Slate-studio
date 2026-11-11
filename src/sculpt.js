@@ -6,11 +6,11 @@ TYPES.sculpt='Sculpt';
 TOOLS.push({id:'sculpt',ic:IC.sculpt,t:'Sculpt (clay brushes)'});
 TABS.push({id:'sculpt',ic:IC.tSculpt,t:'Sculpt',pane:'pSculpt'});
 
-const SCU={on:false,brush:'draw',size:.25,strength:.5,sym:true,carve:false,wire:false,detail:'medium',stab:.4,dyn:false,dynk:'fine',symY:false,symZ:false,pres:true,presSize:false,matcap:true,mcap:'clay',pcol:'#c98e74',pjit:.25,dirt:.5};
+const SCU={on:false,brush:'draw',size:.25,strength:.5,falloff:'soft',sym:true,carve:false,wire:false,detail:'medium',stab:.4,pressStab:.45,deformGuard:.7,jointProtect:.72,micro:false,dyn:false,dynk:'fine',symY:false,symZ:false,pres:true,presSize:false,presStrengthCurve:1,presSizeCurve:1,matcap:true,mcap:'clay',pcol:'#c98e74',pjit:.25,dirt:.5};
 const SC_SHAPES={jesvin:{n:'Jesvin (sculpted from his sheet)',size:[.94,1.82,.58]},realhead:{n:'Realistic head (anatomy base)',size:[.2,.34,.27]},person:{n:'Person (rig-ready)',size:[1,1.75,.6]},ball:{n:'Ball',size:[1.6,1.6,1.6]},head:{n:'Head',size:[1.3,1.7,1.5]},body:{n:'Body',size:[1.1,2.6,.8]},block:{n:'Block',size:[1.6,1.6,1.6]},terrain:{n:'Terrain',size:[10,0,10]}};
 const SC_DETAIL={low:14,medium:22,high:30,ultra:44};
 const SC_GRID={low:48,medium:80,high:110,ultra:160}; const SC_PERSON_H={low:.032,medium:.021,high:.015,ultra:.011};
-const SC_BRUSHES=[{id:'draw',n:'Draw'},{id:'grab',n:'Grab'},{id:'smooth',n:'Smooth'},{id:'inflate',n:'Inflate'},{id:'pinch',n:'Pinch'},{id:'flatten',n:'Flatten'},{id:'clay',n:'Clay build-up'},{id:'crease',n:'Crease (cut lines)'},{id:'noise',n:'Skin and stone grain'},{id:'scrape',n:'Scrape (shave high spots)'},{id:'snake',n:'Snake hook (pull out horns, fingers)'},{id:'layer',n:'Layer (raise to an even height)'},{id:'nudge',n:'Nudge (push sideways)'},{id:'pores',n:'Skin pores'},{id:'wrinkle',n:'Wrinkles (fine lines: forehead, neck, eye bags)'},{id:'paint',n:'Paint color'},{id:'mask',n:'Mask (protect an area)'}];
+const SC_BRUSHES=[{id:'draw',n:'Draw'},{id:'grab',n:'Grab'},{id:'smooth',n:'Smooth'},{id:'relax',n:'Surface relax (preserve volume)'},{id:'inflate',n:'Inflate'},{id:'pinch',n:'Pinch'},{id:'knuckle',n:'Digit joint (ring crease)'},{id:'flatten',n:'Flatten'},{id:'clay',n:'Clay build-up'},{id:'crease',n:'Crease (cut lines)'},{id:'noise',n:'Skin and stone grain'},{id:'scrape',n:'Scrape (shave high spots)'},{id:'snake',n:'Snake hook (pull out horns, fingers)'},{id:'layer',n:'Layer (raise to an even height)'},{id:'nudge',n:'Nudge (push sideways)'},{id:'pores',n:'Skin pores'},{id:'wrinkle',n:'Wrinkles (fine lines: forehead, neck, eye bags)'},{id:'paint',n:'Paint color'},{id:'mask',n:'Mask (protect an area)'}];
 const SC_REFS=[]; /* {name,data} reference images bundled into the page */
 const scSstep=(a,b,x)=>{ const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
 
@@ -145,7 +145,7 @@ function scSetTopo(sc,pos,idx,paint,mask){
   geo.setAttribute('position',pa); geo.setAttribute('color',ca);
   geo.setIndex(n>65535?new THREE.Uint32BufferAttribute(idx,1):new THREE.Uint16BufferAttribute(idx,1));
   geo.computeVertexNormals(); geo.getAttribute('normal').setUsage(THREE.DynamicDrawUsage); geo.computeBoundingSphere(); geo.computeBoundingBox();
-  sc.geo=geo; sc.adj=scAdj(n,idx); sc.tmpI=new Int32Array(n); sc.tmpW=new Float32Array(n); sc.tmpP=new Float32Array(n*3); sc.candI=new Int32Array(n);
+  sc.geo=geo; sc.adj=scAdj(n,idx); sc.tmpI=new Int32Array(n); sc.tmpW=new Float32Array(n); sc.tmpP=new Float32Array(n*3); sc.tmpD=new Float32Array(n*3); sc.tmpMark=new Uint8Array(n); sc.candI=new Int32Array(n);
   scColors(sc);
   if(sc.mesh){ sc.mesh.geometry=geo; if(old&&old!==geo) old.dispose(); scMatSync(sc); }
   scCountSync(sc);
@@ -168,12 +168,17 @@ function scRefine(sc,px,py,pz,r,L){
   for(let t=0;t<T;t++){
     const a=idx[t*3], b=idx[t*3+1], c=idx[t*3+2], A=a*3, B=b*3, C=c*3;
     if(r2!==Infinity){ const cx=(pos[A]+pos[B]+pos[C])/3-px, cy=(pos[A+1]+pos[B+1]+pos[C+1])/3-py, cz=(pos[A+2]+pos[B+2]+pos[C+2])/3-pz; if(cx*cx+cy*cy+cz*cz>r2) continue; }
-    const ab=d2(A,B), bc=d2(B,C), ca=d2(C,A); let u,v,m;
-    if(ab>=bc&&ab>=ca){ u=a; v=b; m=ab; } else if(bc>=ca){ u=b; v=c; m=bc; } else { u=c; v=a; m=ca; }
-    if(m<L2) continue;
-    const key=u<v?u*SCK+v:v*SCK+u; if(split.has(key)) continue;
-    if(nn>=SC_MAXV){ capped=true; break; }
-    split.set(key,nn++); ea.push(u,v);
+    // Refine every overlong edge, not just the longest edge of each face.
+    // Shared-edge keys ensure adjacent triangles reuse the same midpoint, avoiding T-junctions.
+    const edges=[[a,b,d2(A,B)],[b,c,d2(B,C)],[c,a,d2(C,A)]];
+    for(let e=0;e<3;e++){
+      const u=edges[e][0], v=edges[e][1], m=edges[e][2];
+      if(m<L2) continue;
+      const key=u<v?u*SCK+v:v*SCK+u; if(split.has(key)) continue;
+      if(nn>=SC_MAXV){ capped=true; break; }
+      split.set(key,nn++); ea.push(u,v);
+    }
+    if(capped) break;
   }
   if(capped&&!scCapWarned){ scCapWarned=true; toast('This sculpt reached '+SC_MAXV.toLocaleString()+' points, the most a phone handles smoothly. Detail stops growing here.'); }
   const add=nn-n; if(!add) return false;
@@ -426,12 +431,20 @@ function scUpdate(sc){
 /* ---------- brushes ---------- */
 let _scCand=null, _scCandN=0;
 function scCandidates(sc,px,py,pz,r){ const pos=sc.pos, out=sc.candI, r2=r*r; let c=0; for(let i=0,j=0;i<sc.n;i++,j+=3){ const dx=pos[j]-px, dy=pos[j+1]-py, dz=pos[j+2]-pz; if(dx*dx+dy*dy+dz*dz<r2) out[c++]=i; } _scCand=out; _scCandN=c; }
+function scFalloff(d2,r2){
+  const x=Math.sqrt(Math.max(0,d2/r2)), t=clamp(1-x,0,1);
+  if(SCU.falloff==='linear') return t;
+  if(SCU.falloff==='sharp') return t*t*t;
+  if(SCU.falloff==='broad'){ const u=clamp((.38-x)/.38,0,1); return x<=.38?1:u*u*(3-2*u); }
+  /* Soft: smooth cubic fade with a gentle shoulder, the default sculpt feel. */
+  const q=t*t*(3-2*t); return q*(.35+.65*t);
+}
 function scGather(sc,px,py,pz,r,raw){
   const pos=sc.pos, ids=sc.tmpI, ws=sc.tmpW, r2=r*r, mk=raw?null:sc.mask; let c=0;
-  if(_scCand){ for(let q=0;q<_scCandN;q++){ const i=_scCand[q], j=i*3, dx=pos[j]-px, dy=pos[j+1]-py, dz=pos[j+2]-pz, d2=dx*dx+dy*dy+dz*dz; if(d2<r2){ let t=1-d2/r2; t*=t; if(mk) t*=1-mk[i]; if(t>.0005){ ids[c]=i; ws[c]=t; c++; } } } return c; }
+  if(_scCand){ for(let q=0;q<_scCandN;q++){ const i=_scCand[q], j=i*3, dx=pos[j]-px, dy=pos[j+1]-py, dz=pos[j+2]-pz, d2=dx*dx+dy*dy+dz*dz; if(d2<r2){ let t=scFalloff(d2,r2); if(mk) t*=1-mk[i]; if(t>.0005){ ids[c]=i; ws[c]=t; c++; } } } return c; }
   for(let i=0,j=0;i<sc.n;i++,j+=3){
     const dx=pos[j]-px, dy=pos[j+1]-py, dz=pos[j+2]-pz, d2=dx*dx+dy*dy+dz*dz;
-    if(d2<r2){ let t=1-d2/r2; t*=t; if(mk) t*=1-mk[i]; if(t>.0005){ ids[c]=i; ws[c]=t; c++; } }
+    if(d2<r2){ let t=scFalloff(d2,r2); if(mk) t*=1-mk[i]; if(t>.0005){ ids[c]=i; ws[c]=t; c++; } }
   }
   return c;
 }
@@ -448,10 +461,31 @@ function scAreaNormal(sc,c){
   for(let k=0;k<c;k++){ const i=ids[k]*3, w=ws[k]; x+=nm[i]*w; y+=nm[i+1]*w; z+=nm[i+2]*w; }
   const l=Math.hypot(x,y,z)||1; _scN[0]=x/l; _scN[1]=y/l; _scN[2]=z/l;
 }
+/* Limit a single brush update against the local edge scale. This catches
+   accidental spikes from fast/high-pressure strokes without preventing many
+   small dabs from building a deliberate form. */
+function scClampDab(sc,ids,c,before){
+  const st=sc.adj.start, ls=sc.adj.list, pos=sc.pos, mark=sc.tmpMark, guard=clamp(SCU.deformGuard,0,1);
+  const maxFactor=1.5-guard*1.0;
+  for(let k=0;k<c;k++) mark[ids[k]]=1;
+  for(let k=0;k<c;k++){
+    const v=ids[k], i=v*3, a=st[v], b=st[v+1]; let edge=0,m=0;
+    for(let q=a;q<b;q++){
+      const u=ls[q], j=u*3, nx=mark[u]?before[j]:pos[j], ny=mark[u]?before[j+1]:pos[j+1], nz=mark[u]?before[j+2]:pos[j+2];
+      edge+=Math.hypot(nx-before[i],ny-before[i+1],nz-before[i+2]); m++;
+    }
+    if(m){
+      const lim=(edge/m)*maxFactor, dx=pos[i]-before[i], dy=pos[i+1]-before[i+1], dz=pos[i+2]-before[i+2], len=Math.hypot(dx,dy,dz);
+      if(len>lim&&len>1e-10){ const f=lim/len; pos[i]=before[i]+dx*f; pos[i+1]=before[i+1]+dy*f; pos[i+2]=before[i+2]+dz*f; }
+    }
+  }
+  for(let k=0;k<c;k++) mark[ids[k]]=0;
+}
 function scDab(sc,brush,px,py,pz,r,amt,carve,lay){
   if(brush==='mask'){ const c0=scGather(sc,px,py,pz,r,true); if(!c0) return false; if(!sc.mask) sc.mask=new Float32Array(sc.n); const ids=sc.tmpI, ws=sc.tmpW, k=amt*2, sg0=carve?-1:1; scMaskPaint(sc,ids,c0,(v,q)=>clamp(sc.mask[v]+sg0*k*ws[q],0,1)); return false; }
   const c=scGather(sc,px,py,pz,r); if(!c) return false;
-  const pos=sc.pos, ids=sc.tmpI, ws=sc.tmpW, sg=carve?-1:1;
+  const pos=sc.pos, ids=sc.tmpI, ws=sc.tmpW, sg=carve?-1:1, before=sc.tmpD;
+  for(let k=0;k<c;k++){ const j=ids[k]*3; before[j]=pos[j]; before[j+1]=pos[j+1]; before[j+2]=pos[j+2]; }
   if(brush==='draw'){
     scAreaNormal(sc,c); const d=sg*amt*r*.02, nx=_scN[0]*d, ny=_scN[1]*d, nz=_scN[2]*d;
     for(let k=0;k<c;k++){ const i=ids[k]*3, w=ws[k]; pos[i]+=nx*w; pos[i+1]+=ny*w; pos[i+2]+=nz*w; }
@@ -459,13 +493,39 @@ function scDab(sc,brush,px,py,pz,r,amt,carve,lay){
     const nm=sc.geo.attributes.normal.array, d=sg*amt*r*.02;
     for(let k=0;k<c;k++){ const i=ids[k]*3, w=ws[k]*d; pos[i]+=nm[i]*w; pos[i+1]+=nm[i+1]*w; pos[i+2]+=nm[i+2]*w; }
   } else if(brush==='smooth'){
-    const kk=clamp(amt*.35,0,.9), tp=sc.tmpP, st=sc.adj.start, ls=sc.adj.list;
+    /* Bilateral mesh smoothing: nearby neighbours contribute most, while
+       neighbours across a sharp normal change contribute less. This reduces
+       lumpy surfaces without washing out eyelids, lips, creases and other edges. */
+    const kk=clamp(amt*.42,0,.82), tp=sc.tmpP, st=sc.adj.start, ls=sc.adj.list, nm=sc.geo.attributes.normal.array;
     for(let k=0;k<c;k++){
-      const v=ids[k], a=st[v], b=st[v+1]; let x=0,y=0,z=0;
-      for(let q=a;q<b;q++){ const u=ls[q]*3; x+=pos[u]; y+=pos[u+1]; z+=pos[u+2]; }
-      const m=(b-a)||1; tp[k*3]=x/m; tp[k*3+1]=y/m; tp[k*3+2]=z/m;
+      const v=ids[k], a=st[v], b=st[v+1], i=v*3; let x=0,y=0,z=0, sw=0;
+      for(let q=a;q<b;q++){
+        const u=ls[q], j=u*3, dx=pos[j]-pos[i], dy=pos[j+1]-pos[i+1], dz=pos[j+2]-pos[i+2];
+        const d=Math.hypot(dx,dy,dz)||1e-6;
+        const nd=clamp(nm[i]*nm[j]+nm[i+1]*nm[j+1]+nm[i+2]*nm[j+2],0,1);
+        const w=(1/d)*Math.pow(nd,1+SCU.jointProtect*7);
+        x+=pos[j]*w; y+=pos[j+1]*w; z+=pos[j+2]*w; sw+=w;
+      }
+      if(sw>1e-8){ tp[k*3]=x/sw; tp[k*3+1]=y/sw; tp[k*3+2]=z/sw; }
+      else { tp[k*3]=pos[i]; tp[k*3+1]=pos[i+1]; tp[k*3+2]=pos[i+2]; }
     }
     for(let k=0;k<c;k++){ const i=ids[k]*3, f=kk*ws[k]; pos[i]+=(tp[k*3]-pos[i])*f; pos[i+1]+=(tp[k*3+1]-pos[i+1])*f; pos[i+2]+=(tp[k*3+2]-pos[i+2])*f; }
+  } else if(brush==='relax'){
+    /* Tangential Laplacian relaxation: smooths uneven triangles while removing
+       the normal component that causes ordinary Laplacian smoothing to shrink forms. */
+    const kk=clamp(amt*.42,0,.72), tp=sc.tmpP, st=sc.adj.start, ls=sc.adj.list, nm=sc.geo.attributes.normal.array;
+    for(let k=0;k<c;k++){
+      const v=ids[k], a=st[v], b=st[v+1], i=v*3; let x=0,y=0,z=0, edge=0, m=0;
+      for(let q=a;q<b;q++){ const v=ls[q], u=v*3, dx=pos[u]-pos[i], dy=pos[u+1]-pos[i+1], dz=pos[u+2]-pos[i+2];
+        const nd=clamp(nm[i]*nm[u]+nm[i+1]*nm[u+1]+nm[i+2]*nm[u+2],0,1), w=.12+.88*Math.pow(nd,1+SCU.jointProtect*7);
+        x+=pos[u]*w; y+=pos[u+1]*w; z+=pos[u+2]*w; sw+=w; edge+=Math.hypot(dx,dy,dz); m++; }
+      if(!m||sw<1e-8){ tp[k*3]=tp[k*3+1]=tp[k*3+2]=0; continue; }
+      x=x/sw-pos[i]; y=y/sw-pos[i+1]; z=z/sw-pos[i+2];
+      const dn=x*nm[i]+y*nm[i+1]+z*nm[i+2]; x-=nm[i]*dn; y-=nm[i+1]*dn; z-=nm[i+2]*dn;
+      const lim=(edge/m)*.22, len=Math.hypot(x,y,z); if(len>lim&&len>0){ const f=lim/len; x*=f; y*=f; z*=f; }
+      tp[k*3]=x; tp[k*3+1]=y; tp[k*3+2]=z;
+    }
+    for(let k=0;k<c;k++){ const i=ids[k]*3, f=kk*ws[k]; pos[i]+=tp[k*3]*f; pos[i+1]+=tp[k*3+1]*f; pos[i+2]+=tp[k*3+2]*f; }
   } else if(brush==='pinch'){
     scAreaNormal(sc,c); const f0=clamp(sg*amt*.12,-.5,.5), nx=_scN[0], ny=_scN[1], nz=_scN[2];
     for(let k=0;k<c;k++){
@@ -476,6 +536,19 @@ function scDab(sc,brush,px,py,pz,r,amt,carve,lay){
     scAreaNormal(sc,c); const d=sg*amt*r*.012, nx=_scN[0], ny=_scN[1], nz=_scN[2], f0=clamp(amt*.1,0,.5);
     for(let k=0;k<c;k++){ const i=ids[k]*3, w=ws[k], dist=(pos[i]-px)*nx+(pos[i+1]-py)*ny+(pos[i+2]-pz)*nz;
       pos[i]+=nx*(d*w-dist*f0*w); pos[i+1]+=ny*(d*w-dist*f0*w); pos[i+2]+=nz*(d*w-dist*f0*w); }
+  } else if(brush==='knuckle'){
+    /* A compact annular fold tool for finger/toe joints. It creates a shallow
+       circumferential groove with a restrained raised lip on either side,
+       unlike the ordinary crease brush which follows a narrow stroke. */
+    scAreaNormal(sc,c); const nx=_scN[0], ny=_scN[1], nz=_scN[2], depth=sg*amt*r*.045;
+    for(let k=0;k<c;k++){
+      const i=ids[k]*3, dx=pos[i]-px, dy=pos[i+1]-py, dz=pos[i+2]-pz;
+      const dn=dx*nx+dy*ny+dz*nz, tangent=Math.hypot(dx-nx*dn,dy-ny*dn,dz-nz*dn);
+      const u=tangent/Math.max(r,1e-6), groove=Math.exp(-Math.pow((u-.43)/.105,2));
+      const lip=Math.exp(-Math.pow((u-.61)/.13,2));
+      const q=depth*ws[k]*(groove*.9-lip*.22);
+      pos[i]+=nx*q; pos[i+1]+=ny*q; pos[i+2]+=nz*q;
+    }
   } else if(brush==='crease'){
     scAreaNormal(sc,c); const d=-sg*amt*r*.055, f0=clamp(sg*amt*.12,-.45,.45), nx=_scN[0], ny=_scN[1], nz=_scN[2];
     for(let k=0;k<c;k++){ const i=ids[k]*3, w=ws[k]*ws[k]; pos[i]+=nx*d*w; pos[i+1]+=ny*d*w; pos[i+2]+=nz*d*w;
@@ -514,23 +587,31 @@ function scDab(sc,brush,px,py,pz,r,amt,carve,lay){
       pos[i]-=nx*f; pos[i+1]-=ny*f; pos[i+2]-=nz*f;
     }
   }
+  scClampDab(sc,ids,c,before);
   return true;
 }
 function scMove(sc,px,py,pz,r,dx,dy,dz,k,tangent){
-  const c=scGather(sc,px,py,pz,r); if(!c) return false; const pos=sc.pos, ids=sc.tmpI, ws=sc.tmpW;
+  const c=scGather(sc,px,py,pz,r); if(!c) return false; const pos=sc.pos, ids=sc.tmpI, ws=sc.tmpW, before=sc.tmpD;
+  for(let q=0;q<c;q++){ const j=ids[q]*3; before[j]=pos[j]; before[j+1]=pos[j+1]; before[j+2]=pos[j+2]; }
   if(tangent){ scAreaNormal(sc,c); const d=dx*_scN[0]+dy*_scN[1]+dz*_scN[2]; dx-=_scN[0]*d; dy-=_scN[1]*d; dz-=_scN[2]*d; }
   for(let q=0;q<c;q++){ const i=ids[q]*3, w=ws[q]*k; pos[i]+=dx*w; pos[i+1]+=dy*w; pos[i+2]+=dz*w; }
+  scClampDab(sc,ids,c,before);
   return true;
 }
 function scMirrors(x,y,z){ const out=[[1,1,1]]; if(SCU.sym&&Math.abs(x)>1e-4) out.push([-1,1,1]); if(SCU.symY&&Math.abs(y)>1e-4) out.slice().forEach(m=>out.push([m[0],-1,m[2]])); if(SCU.symZ&&Math.abs(z)>1e-4) out.slice().forEach(m=>out.push([m[0],m[1],-1])); return out; }
 function scGrabBegin(sc,px,py,pz,r){
-  const sets=[], mk=(x,y,z,sx)=>{ const c=scGather(sc,x,y,z,r); sets.push({ids:sc.tmpI.slice(0,c),w:sc.tmpW.slice(0,c),sx:sx}); };
-  mk(px,py,pz,1); if(SCU.sym&&Math.abs(px)>1e-4) mk(-px,py,pz,-1);
+  /* Use the same reflection set as every other brush. Previously Grab only
+     mirrored left/right, so top/bottom and front/back symmetry silently failed. */
+  const sets=[];
+  scMirrors(px,py,pz).forEach(m=>{
+    const c=scGather(sc,px*m[0],py*m[1],pz*m[2],r);
+    if(c) sets.push({ids:sc.tmpI.slice(0,c),w:sc.tmpW.slice(0,c),mirror:m});
+  });
   return {sets:sets,snap:sc.pos.slice()};
 }
 function scGrabMove(sc,g,dx,dy,dz){
   sc.pos.set(g.snap); const pos=sc.pos;
-  g.sets.forEach(s=>{ for(let k=0;k<s.ids.length;k++){ const i=s.ids[k]*3, w=s.w[k]; pos[i]+=dx*s.sx*w; pos[i+1]+=dy*w; pos[i+2]+=dz*w; } });
+  g.sets.forEach(s=>{ const m=s.mirror; for(let k=0;k<s.ids.length;k++){ const i=s.ids[k]*3, w=s.w[k]; pos[i]+=dx*m[0]*w; pos[i+1]+=dy*m[1]*w; pos[i+2]+=dz*m[2]*w; } });
 }
 
 /* ---------- input ---------- */
@@ -552,7 +633,7 @@ stage.addEventListener('pointerdown',e=>{
   const node=sculptTarget(), hit=scPick(e.clientX,e.clientY,node);
   if(!hit){ orbit.enabled=true; return; }
   const sc=node.userData.sc, r=SCU.size*sc.ref;
-  scS={id:e.pointerId,x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,node:node,sc:sc,snap:scSnap(sc),changed:false,grab:null,pr:e.pointerType==='pen'?(e.pressure||.5):1,tRef:0,layer:null,cur:hit.l.clone()};
+  scS={id:e.pointerId,x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,node:node,sc:sc,snap:scSnap(sc),changed:false,grab:null,pr:e.pointerType==='pen'?(e.pressure||.5):1,prTarget:e.pointerType==='pen'?(e.pressure||.5):1,prSmooth:e.pointerType==='pen'?(e.pressure||.5):1,tRef:0,layer:null,cur:hit.l.clone()};
   if(SCU.brush==='snake'||SCU.brush==='nudge') scS.plane=new THREE.Plane().setFromNormalAndCoplanarPoint(edit.getWorldDirection(new THREE.Vector3()).negate(),hit.w);
   if(SCU.brush==='grab'){
     scS.grab=scGrabBegin(sc,hit.l.x,hit.l.y,hit.l.z,r); scS.l0=hit.l.clone();
@@ -562,7 +643,7 @@ stage.addEventListener('pointerdown',e=>{
 },true);
 addEventListener('pointermove',e=>{
   const p=scPtrs.get(e.pointerId); if(p){ p.x=e.clientX; p.y=e.clientY; }
-  if(scS&&e.pointerId===scS.id){ scS.x=e.clientX; scS.y=e.clientY; if(e.pointerType==='pen'&&e.pressure>0) scS.pr=e.pressure; }
+  if(scS&&e.pointerId===scS.id){ scS.x=e.clientX; scS.y=e.clientY; if(e.pointerType==='pen'&&e.pressure>0){ scS.pr=e.pressure; scS.prTarget=e.pressure; } }
   if(e.pointerType==='mouse') scHover=(e.target===renderer.domElement)?{x:e.clientX,y:e.clientY}:null;
 });
 function scUp(e){
@@ -590,8 +671,8 @@ function sculptFrame(dt){
   scRing.visible=false; scGuideSync(); scSyncStatus(node); scMatcapSync();
   if(scOrbitHeld&&!scS&&scPtrs.size===0){ orbit.enabled=(S.view==='free'); scOrbitHeld=false; }
   if(!act){ if(scS) scEnd(); return; }
-  const sc=node.userData.sc, pr=scS&&SCU.pres?scS.pr:1, r=SCU.size*sc.ref*(scS&&SCU.presSize?.35+.65*scS.pr:1); let src=scS||scHover; if(!src) return;
-  if(scS){ const f=1-Math.pow(clamp(SCU.stab,0,.95),clamp(dt*60,.3,3)); scS.sx+=(scS.x-scS.sx)*f; scS.sy+=(scS.y-scS.sy)*f; src={x:scS.sx,y:scS.sy}; }
+  const sc=node.userData.sc; let rawPr=1; if(scS){ const tau=.012+clamp(SCU.pressStab,0,.95)*.16, pf=1-Math.exp(-dt/Math.max(.001,tau)); scS.prSmooth+=(scS.prTarget-scS.prSmooth)*pf; rawPr=clamp(scS.prSmooth,0,1); } const pr=scS&&SCU.pres?Math.pow(rawPr,SCU.presStrengthCurve):1, sizePr=scS&&SCU.presSize?Math.pow(rawPr,SCU.presSizeCurve):1, r=SCU.size*sc.ref*(scS&&SCU.presSize?.35+.65*sizePr:1); let src=scS||scHover; if(!src) return;
+  if(scS){ const tau=.012+clamp(SCU.stab,0,.95)*.18, f=1-Math.exp(-dt/Math.max(.001,tau)); scS.sx+=(scS.x-scS.sx)*f; scS.sy+=(scS.y-scS.sy)*f; src={x:scS.sx,y:scS.sy}; }
   const hit=scPick(src.x,src.y,node);
   if(hit){ scRing.position.copy(hit.w).addScaledVector(hit.n,.004); scRing.quaternion.setFromUnitVectors(_scZ,hit.n); scRing.scale.setScalar(Math.max(.001,r*node.scale.x)); scRing.visible=true; }
   if(!scS) return;
@@ -599,7 +680,7 @@ function sculptFrame(dt){
   if(scS.grab){
     if(!hit&&!scS.grab) return; if(!ray.ray.intersectPlane(scS.plane,_scT)) return;
     const l=sc.mesh.worldToLocal(_scT.clone());
-    scGrabMove(sc,scS.grab,l.x-scS.l0.x,l.y-scS.l0.y,l.z-scS.l0.z); scS.changed=true; scUpdate(sc); return;
+    scGrabMove(sc,scS.grab,(l.x-scS.l0.x)*pr,(l.y-scS.l0.y)*pr,(l.z-scS.l0.z)*pr); scS.changed=true; scUpdate(sc); return;
   }
   if(B==='snake'){
     if(!ray.ray.intersectPlane(scS.plane,_scT)) return; const l=sc.mesh.worldToLocal(_scT.clone()), d=l.clone().sub(scS.cur); if(d.lengthSq()<1e-10) return;
@@ -615,7 +696,7 @@ function sculptFrame(dt){
     if(did){ scS.changed=true; scUpdate(sc); } return;
   }
   const mir=scMirrors(hit.l.x,hit.l.y,hit.l.z);
-  if((SCU.dyn&&B!=='mask')||B==='pores'||B==='wrinkle'){ const now=performance.now(); if(now-scS.tRef>(sc.n>100000?170:90)){ scS.tRef=now; const L=B==='pores'?sc.ref*.005:B==='wrinkle'?sc.ref*.007:Math.max(r*SC_DYNK[SCU.dynk],sc.ref*.0025); let ch=false; mir.forEach(m=>{ ch=scRefine(sc,hit.l.x*m[0],hit.l.y*m[1],hit.l.z*m[2],r,L)||ch; }); if(ch) scS.changed=true; } }
+  if(((SCU.dyn||SCU.micro)&&B!=='mask'&&B!=='paint')||B==='pores'||B==='wrinkle'){ const now=performance.now(); if(now-scS.tRef>(sc.n>100000?170:90)){ scS.tRef=now; const L=B==='pores'?sc.ref*.005:B==='wrinkle'?sc.ref*.007:SCU.micro?Math.max(r*.10,sc.ref*.0012):Math.max(r*SC_DYNK[SCU.dynk],sc.ref*.0025); let ch=false; mir.forEach(m=>{ ch=scRefine(sc,hit.l.x*m[0],hit.l.y*m[1],hit.l.z*m[2],r,L)||ch; }); if(ch) scS.changed=true; } }
   if(B==='layer'&&!scS.layer){ const c=scGather(sc,hit.l.x,hit.l.y,hit.l.z,r,true); if(!c) return; scAreaNormal(sc,c); scS.layer=[hit.l.x,hit.l.y,hit.l.z,_scN[0],_scN[1],_scN[2],(SCU.carve?-1:1)*r*(.04+.14*SCU.strength)]; }
   /* spaced dabs along the path, like Blender: even strokes at any speed, no build-up while holding still */
   const amt=SCU.strength*pr*.9; let did=false, pts=[];
@@ -818,7 +899,10 @@ function buildSculptPane(){
   const grid=document.createElement('div'); grid.className='g2';
   const mark=()=>Array.from(grid.children).forEach(x=>x.classList.toggle('on',x.dataset.b===SCU.brush));
   SC_BRUSHES.forEach(b=>{ const x=scBtn(b.n,()=>{ SCU.brush=b.id; mark(); setMode('sculpt'); }); x.dataset.b=b.id; grid.appendChild(x); }); mark();
-  const cs=chk('Mirror left and right',()=>SCU.sym,v=>{ SCU.sym=v; }), cc=chk('Carve (reverse the brush)',()=>SCU.carve,v=>{ SCU.carve=v; });
+  const fall=document.createElement('select'); fall.className='sel2'; fall.setAttribute('aria-label','Brush falloff');
+  [['soft','Soft (balanced)'],['linear','Linear (even fade)'],['sharp','Sharp (concentrated)'],['broad','Broad (flat center)']].forEach(([v,t])=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; fall.appendChild(o); });
+  fall.value=SCU.falloff; fall.addEventListener('change',()=>{ SCU.falloff=fall.value; });
+  const cs=chk('Mirror left and right (X)',()=>SCU.sym,v=>{ SCU.sym=v; }), cc=chk('Carve (reverse the brush)',()=>SCU.carve,v=>{ SCU.carve=v; });
   const cw=chk('Show wireframe',()=>SCU.wire,v=>{ SCU.wire=v; const n=sculptTarget(); if(n) n.userData.sc.mesh.material.wireframe=v; if(scMatcapMat) scMatcapMat.wireframe=v; });
   const dk=document.createElement('select'); dk.className='sel2'; dk.setAttribute('aria-label','Detail size'); dk.innerHTML='<option value="coarse">Coarse</option><option value="fine" selected>Fine</option><option value="finest">Finest (wrinkles, pores)</option>'; dk.addEventListener('change',()=>{ SCU.dynk=dk.value; });
   const cnt=document.createElement('p'); cnt.className='note'; cnt.id='scCount';
@@ -853,8 +937,8 @@ function buildSculptPane(){
   const g3=document.createElement('div'); g3.className='g2'; g3.append(bj,cp);
   host.append(
     panel('Sculpt',[stat,chBtn,shapes,row('Resolution',det),noteEl('Tap a shape to add it, then drag on it with one finger. Use Low if the iPad feels slow, High for faces.')]),
-    panel('Brush',[grid,rangeField('Size',.03,.7,.01,()=>SCU.size,v=>{ SCU.size=v; },f2,null),rangeField('Strength',.05,1,.01,()=>SCU.strength,v=>{ SCU.strength=v; },f2,null),rangeField('Stroke smoothing',0,.95,.01,()=>SCU.stab,v=>{ SCU.stab=v; },f2,null),cs,chk('Mirror top and bottom',()=>SCU.symY,v=>{ SCU.symY=v; }),chk('Mirror front and back',()=>SCU.symZ,v=>{ SCU.symZ=v; }),cc,chk('Apple Pencil pressure changes strength',()=>SCU.pres,v=>{ SCU.pres=v; }),chk('Apple Pencil pressure changes size',()=>SCU.presSize,v=>{ SCU.presSize=v; }),noteEl('Stroke smoothing steadies shaky lines: the brush follows your finger a little behind it. Carve also erases the Mask brush.')]),
-    panel('Detail',[chk('Detail brush: add detail where you sculpt',()=>SCU.dyn,v=>{ SCU.dyn=v; }),row('Detail size',dk),scBtn('Add detail everywhere (about 4x)',scDetailAll),cnt,noteEl('With the Detail brush on, every stroke splits the mesh into smaller triangles under the brush, so fine lines, wrinkles and sharp edges stay crisp. Smaller brushes give finer detail. Paint also gets sharper where there is more detail.')]),
+    panel('Brush',[grid,row('Falloff',fall),rangeField('Size',.008,.7,.002,()=>SCU.size,v=>{ SCU.size=v; },f2,null),rangeField('Strength',.05,1,.01,()=>SCU.strength,v=>{ SCU.strength=v; },f2,null),rangeField('Stroke stabilizer',0,.95,.01,()=>SCU.stab,v=>{ SCU.stab=v; },f2,null),rangeField('Pressure smoothing',0,.95,.01,()=>SCU.pressStab,v=>{ SCU.pressStab=v; },f2,null),rangeField('Deformation protection',0,1,.01,()=>SCU.deformGuard,v=>{ SCU.deformGuard=v; },f2,null),rangeField('Joint / crease preservation',0,1,.01,()=>SCU.jointProtect,v=>{ SCU.jointProtect=v; },f2,null),cs,chk('Mirror top and bottom (Y)',()=>SCU.symY,v=>{ SCU.symY=v; }),chk('Mirror front and back (Z)',()=>SCU.symZ,v=>{ SCU.symZ=v; }),cc,chk('Apple Pencil pressure changes strength',()=>SCU.pres,v=>{ SCU.pres=v; }),rangeField('Pressure-to-strength response',.5,2.5,.05,()=>SCU.presStrengthCurve,v=>{ SCU.presStrengthCurve=v; },f2,null),chk('Apple Pencil pressure changes size',()=>SCU.presSize,v=>{ SCU.presSize=v; }),rangeField('Pressure-to-size response',.5,2.5,.05,()=>SCU.presSizeCurve,v=>{ SCU.presSizeCurve=v; },f2,null),noteEl('Pressure response: 1.0 is linear. Lower values make light touches more effective; higher values reserve stronger effects for firmer pressure. Strength and brush size have independent curves. Brush falloff controls how force fades from the center to the edge: Soft is balanced, Linear fades evenly, Sharp concentrates force near the center, and Broad keeps a flatter center for larger forms. Mouse and finger input use full pressure. Symmetry is measured from the sculpt object local center. X mirrors left/right, Y mirrors top/bottom and Z mirrors front/back. Draw, Grab, Snake, Nudge and other brushes use the enabled axes. Stroke stabilizer steadies shaky lines with a time-based filter, so its response stays consistent across frame rates. Pressure smoothing filters sudden Apple Pencil pressure jumps independently of position. Deformation protection limits unusually large per-dab vertex movement relative to nearby edge lengths, reducing spikes and stretched triangles; lower it when you want more aggressive shaping. Joint / crease preservation makes Smooth and Surface Relax respect sharp changes in surface direction, helping retain folds and bend contours around elbows, knees and other curved areas. Increase either setting for steadier results; lower position/pressure smoothing for faster response. Surface relax smooths uneven triangles while helping preserve the overall volume; ordinary Smooth is stronger but can shrink forms. Carve also erases the Mask brush.')]),
+    panel('Detail',[chk('Micro detail mode (fingers, toes, eyelids)',()=>SCU.micro,v=>{ SCU.micro=v; if(v&&SCU.size>.035) SCU.size=.025; }),chk('Detail brush: add detail where you sculpt',()=>SCU.dyn,v=>{ SCU.dyn=v; }),row('Detail size',dk),scBtn('Add detail everywhere (about 4x)',scDetailAll),cnt,noteEl('Micro detail mode enables very small brush sizes and automatically refines triangles locally under the stroke, making it easier to work on fingertips, toes, eyelids and narrow creases. It can increase polygon count quickly; use it only where needed and watch the point counter. Detail brush separately adds local resolution while sculpting. Both stop at the device safety limit. Paint also gets sharper where there is more detail. Digit joint (ring crease) makes a compact circumferential fold with a subtle raised lip; use a small brush on finger or toe joints, preferably with Micro detail mode enabled. It is a surface-detail aid and does not create separate finger bones or change the hand rig.')]),
     panel('Paint',[row('Color',pcol),sw,rangeField('Skin mottling',0,1,.01,()=>SCU.pjit,v=>{ SCU.pjit=v; },f2,null),rangeField('Dirt strength',0,1,.01,()=>SCU.dirt,v=>{ SCU.dirt=v; },f2,null),pg,noteEl('Pick Paint color in the brushes, or tap a color, then paint on the model. Skin mottling adds natural unevenness. Dirt in crevices darkens folds and lightens edges, like a weathered texture. Turn on the Detail brush for sharper paint.')]),
     panel('Mask',[(()=>{ const r=document.createElement('div'); r.className='g2'; r.append(scBtn('Clear mask',scMaskClear),scBtn('Invert mask',scMaskInvert),scBtn('Soften mask edge',scMaskBlur)); return r; })(),noteEl('Pick the Mask brush and paint the parts you want to protect. They turn dark and no other brush can change them. Undo works on masks too.')]),
     panel('Edit',[ed,rs,cw,chk('Studio view while sculpting (shows form clearly)',()=>SCU.matcap,v=>{ SCU.matcap=v; }),(()=>{ const sl=document.createElement('select'); sl.className='sel2'; sl.setAttribute('aria-label','Studio material'); Object.keys(SC_MATCAPS).forEach(k=>{ const op=document.createElement('option'); op.value=k; op.textContent=SC_MATCAPS[k].n; sl.appendChild(op); }); sl.value=SCU.mcap; sl.addEventListener('change',()=>{ SCU.mcap=sl.value; SCU.matcap=true; }); return row('Studio material',sl); })(),chk('Photo texture from reference (character)',()=>PHOTO.on,v=>photoSet(v))]),

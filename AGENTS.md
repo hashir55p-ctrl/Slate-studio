@@ -36,3 +36,7 @@ Slate Studio is a Blender-like 3D animation/sculpting app that runs in one web p
 - Hair shapes differ from the character sheets (baked in the mesh). Hands have no individual fingers. Hashir/Stany/Renjith/Jesvin outfits only recoloured, not remodelled.
 - Planned: modular characters (separate eyes, brows, hands, clothes, hair), path-traced "final still" mode, Apple Pencil pressure and faster dynamic-detail sculpting.
 - Scene 2 (jeep drive) is waiting for the final dialogue audio (`assets/s2.mp3`, built with `tools/mkvb.py` into `src/embed_vo2.js`, then added before `scene2.js` in `build.sh`).
+
+## Before you hand back a build (lessons learned)
+- A build that passes `node --check` can still crash at runtime. Build 135 shipped with three creator bugs that only showed when a character was actually built (a `const` used before its declaration, a wrong object key, a missing bone entry). After any change to `src/creator.js`, build a character in a browser (see `tools/crtest.js`, which needs `window.__cr` from the end of `creator.js`) and check the console for errors.
+- Keep the debug hooks at the end of `creator.js` (`window.__cr...`) and the `window.__sp...` hooks in `scphoto.js`; the test scripts use them.

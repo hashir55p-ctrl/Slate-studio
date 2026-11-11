@@ -138,7 +138,7 @@ function mfUpdate(t,playing,dt){
     let tg=[0,1,0], spk=false;
     if(visA&&(playing||S.view==='cam'||S.recording)){ for(let i=0;i<caps.length;i++){ const cc=caps[i]; if(cc.who===nm&&t>=cc.t0-.06&&t<=cc.t1+.1){ const kk=Math.max(0,Math.min(visA.length-1,Math.round((t-(vo.t0||0))*30))), v=visA[kk], code=v>>5, it=(v&31)/31, VV=CR_VIS[code]||CR_VIS[0]; tg=[VV[0]*(.25+.75*it),VV[1],VV[2]]; spk=true; break; } } }
     const ex=faceExpr(nm,t), pul=ex.pulse*Math.abs(Math.sin(t*8.5+M.ph))*.5, al=Math.min(1,(dt||.033)*20);
-    const fa=PZ['face.a']||Z, fb=PZ['face.b']||Z, fc=PZ['face.c']||Z, fd=PZ['face.d']||Z;
+    const fa=PZ['face.a']||Z, fb=PZ['face.b']||Z, fc=PZ['face.c']||Z, fd=PZ['face.d']||Z, fe=PZ['face.e']||Z;
     tg[2]=Math.max(tg[2],fb[2]); const sm=Math.max(-1,Math.min(1,ex.sm+fb[0])), bt=Math.max(-1,Math.min(1,ex.bt+fc[2]));
     /* only the speaker's mouth moves; listeners keep a still smile or gasp so nobody looks like they are talking */
     const open=Math.max(0,Math.min(1,Math.max(spk?tg[0]+ex.op*.35+pul*.25:Math.min(.1,ex.op*.2),fa[2])));
@@ -154,7 +154,9 @@ function mfUpdate(t,playing,dt){
       const tt=t+M.ph, bl=((tt/3.8)%1)<.05?Math.sin(((tt/3.8)%1)/.05*Math.PI):0, lc=Math.max(0,Math.min(1,Math.max(bl,ex.lid+pul*.15,i?fa[1]:fa[0],fd[2]*.55)));
       set('lidU.'+S1,0,-lc*.003+Math.max(0,bu)*.25,0); set('lidL.'+S1,0,lc*.0016+fd[2]*.0018+smp*.0012,0);
       const ld=F.lids&&F.lids[i]; if(ld){ ld.visible=lc>.03; ld.scale.y=Math.max(.001,lc); const cv1=lc<.45; if(ld.userData.cl) ld.userData.cl.visible=cv1; if(ld.userData.cl2) ld.userData.cl2.visible=cv1; } });
-    set('lipU',0,smp*.0008+rd*.0006-Math.max(0,-sm)*.0006,rd*.0045); set('lipL',0,-rd*.0008,rd*.004);
+    const puck=Math.max(0,Math.min(1,fe[0]||0)), upper=Math.max(-1,Math.min(1,fe[1]||0)), lower=Math.max(-1,Math.min(1,fe[2]||0));
+    set('lipU',0,smp*.0008+rd*.0006-Math.max(0,-sm)*.0006+upper*.0022,rd*.0045+puck*.0015);
+    set('lipL',0,-rd*.0008+lower*.0022,rd*.004+puck*.0013);
     /* eyes: real eyeballs look at the speaker (or the one who spoke last when this character is talking) */
     const EY=F.lids&&F.lids.eyes; if(EY&&R.bones&&R.bones.head){ let tgtN=null, last=null;
       for(let i=0;i<caps.length;i++){ const cc=caps[i]; if(cc.t0-.06>t) break; if(cc.who!==nm) last=cc.who; if(t>=cc.t0-.06&&t<=cc.t1+.15&&cc.who!==nm){ tgtN=cc.who; } }
@@ -183,9 +185,19 @@ function mfLids(node,R,meshes,HVv,surfZ,eX,eyeY,k,fromB,tx){
   const mat=new THREE.MeshStandardMaterial({map:tex,transparent:true,roughness:.75,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
   const cc=document.createElement('canvas'); cc.width=cc.height=64; const cg=cc.getContext('2d'); const rg=cg.createRadialGradient(32,32,2,32,32,30); rg.addColorStop(0,'rgba(255,255,255,1)'); rg.addColorStop(.55,'rgba(255,255,255,.95)'); rg.addColorStop(1,'rgba(255,255,255,0)'); cg.fillStyle=rg; cg.fillRect(0,0,64,64);
   const clMat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cc),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6,toneMapped:false});
-  const ic=document.createElement('canvas'); ic.width=ic.height=128; const ig=ic.getContext('2d'); ig.fillStyle='#2b1a10'; ig.beginPath(); ig.arc(64,64,64,0,7); ig.fill();
-  const irg=ig.createRadialGradient(64,64,14,64,64,56); irg.addColorStop(0,'#5a3418'); irg.addColorStop(.6,'#7a4a24'); irg.addColorStop(1,'#2b1a10'); ig.fillStyle=irg; ig.beginPath(); ig.arc(64,64,58,0,7); ig.fill();
-  ig.fillStyle='#0a0705'; ig.beginPath(); ig.arc(64,64,22,0,7); ig.fill();
+  const ic=document.createElement('canvas'); ic.width=ic.height=128; const ig=ic.getContext('2d');
+  ig.fillStyle='#20130d'; ig.beginPath(); ig.arc(64,64,64,0,Math.PI*2); ig.fill();
+  const irg=ig.createRadialGradient(64,64,15,64,64,57); irg.addColorStop(0,'#4b2a17'); irg.addColorStop(.42,'#80502a'); irg.addColorStop(.78,'#69401f'); irg.addColorStop(1,'#24160f');
+  ig.fillStyle=irg; ig.beginPath(); ig.arc(64,64,59,0,Math.PI*2); ig.fill();
+  /* Fine radial iris fibres, kept low contrast so the eye remains natural. */
+  for(let a=0;a<360;a+=3){
+    const ang=a*Math.PI/180, inner=27+(a%5)*1.1, outer=54+(a%7)*.45;
+    ig.strokeStyle=(a%2)?'rgba(214,158,91,.20)':'rgba(28,16,10,.24)'; ig.lineWidth=(a%4===0)?1.35:.75;
+    ig.beginPath(); ig.moveTo(64+Math.cos(ang)*inner,64+Math.sin(ang)*inner);
+    ig.lineTo(64+Math.cos(ang)*outer,64+Math.sin(ang)*outer); ig.stroke();
+  }
+  ig.strokeStyle='rgba(19,11,7,.9)'; ig.lineWidth=4; ig.beginPath(); ig.arc(64,64,57,0,Math.PI*2); ig.stroke();
+  ig.fillStyle='#090605'; ig.beginPath(); ig.arc(64,64,22,0,Math.PI*2); ig.fill();
   const irisMat=new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(ic),roughness:.25,metalness:0,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}); irisMat.map.encoding=THREE.sRGBEncoding;
   const eyeMat=new THREE.MeshStandardMaterial({color:0xf2eee8,roughness:.22,metalness:0});
   const head=R.bones.head, out=[];
@@ -196,7 +208,11 @@ function mfLids(node,R,meshes,HVv,surfZ,eX,eyeY,k,fromB,tx){
     head.worldToLocal(pF); head.worldToLocal(pB); const dirF=pF.clone().sub(pB).normalize(), RB=.0136*k, cen=pF.clone().addScaledVector(dirF,-.0020*k);
     const eg=new THREE.Group(); eg.position.copy(cen); eg.userData.rigOwned=true; const Q0=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),dirF); eg.quaternion.copy(Q0); head.add(eg);
     const ball=new THREE.Mesh(new THREE.SphereGeometry(RB,24,16),eyeMat); ball.scale.set(1,.74,.3); ball.userData.rigOwned=true; eg.add(ball);
-    const IR=.0070*k, iris=new THREE.Mesh(new THREE.CircleGeometry(IR,32),irisMat); iris.position.z=.3*Math.sqrt(RB*RB-IR*IR)+.0004*k; iris.userData.rigOwned=true; eg.add(iris);
+    const IR=.0070*k, iris=new THREE.Mesh(new THREE.CircleGeometry(IR,40),irisMat); iris.position.z=.3*Math.sqrt(RB*RB-IR*IR)+.0004*k; iris.userData.rigOwned=true; eg.add(iris);
+    const limbal=new THREE.Mesh(new THREE.TorusGeometry(IR*.96,.00032*k,6,40),new THREE.MeshBasicMaterial({color:0x21150e})); limbal.position.z=iris.position.z+.000025*k; limbal.userData.rigOwned=true; eg.add(limbal);
+    const glintMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.9,depthWrite:false,toneMapped:false});
+    const glint=new THREE.Mesh(new THREE.CircleGeometry(.00125*k,16),glintMat); glint.position.set(-.0020*k,.0022*k,iris.position.z+.00008*k); glint.userData.rigOwned=true; eg.add(glint);
+    const glint2=new THREE.Mesh(new THREE.CircleGeometry(.00048*k,12),glintMat); glint2.position.set(.0020*k,-.0018*k,iris.position.z+.00008*k); glint2.userData.rigOwned=true; eg.add(glint2);
     out.eyes=out.eyes||[]; out.eyes.push({g:eg,Q0:Q0,dirF:dirF,cen:cen,sx:sx,iris:iris,RB:RB,ox:0,oy:0});
     const piv=new THREE.Group(); piv.position.copy(w).addScaledVector(dirF,.0046*k); piv.userData.rigOwned=true; head.add(piv);
     const lid=new THREE.Mesh(new THREE.PlaneGeometry(.028*k,.016*k).translate(0,-.008*k,0),mat); lid.userData.rigOwned=true; lid.renderOrder=5; lid.scale.y=.001; lid.visible=false; piv.add(lid); out.push(lid);

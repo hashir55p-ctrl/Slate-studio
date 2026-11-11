@@ -24,7 +24,27 @@ function faceBuild(node){
   const root=new THREE.Group(); root.userData.rigOwned=true; root.userData.face=true; root.userData.rigRef=R; hb.add(root);
   const place=(m,x,y,z)=>{ const P=new THREE.Vector3(x,y,z).applyMatrix4(M); m.position.copy(P); m.quaternion.copy(q); m.userData.rigOwned=true; m.raycast=()=>{}; m.frustumCulled=false; root.add(m); return m; };
   const skin=faceSkin(sm,H,y0,zm), mk=(c,off)=>new THREE.MeshBasicMaterial({color:c,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:off,polygonOffsetUnits:off});
-  const lw=H*.026*A.es*k, lh=H*.0125*A.es*k, F={root:root,H:H,k:k,lw:lw,lh:lh,ph:(node.userData.name||'x').length*1.37};
+  const lw=H*.026*A.es*k, lh=H*.0125*A.es*k, F={root:root,H:H,k:k,lw:lw,lh:lh,ph:(node.userData.name||'x').length*1.37,details:[]};
+  /* Fine facial folds are thin, low-contrast surface overlays. They are
+     deliberately subtle: the skin microtexture handles pores, while these
+     curves add eyelid, under-eye and nasolabial definition without baking
+     detail into the skinned base mesh. */
+  const detailMat=new THREE.MeshBasicMaterial({color:0x754d40,transparent:true,opacity:.19,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+  const addFold=(pts,radius,opacity)=>{
+    const curve=new THREE.CatmullRomCurve3(pts.map(v=>new THREE.Vector3(v[0]*H*k,v[1]*H*k,v[2]*H*k)));
+    const geo=new THREE.TubeGeometry(curve,18,radius*H*k,5,false);
+    const mat=detailMat.clone(); mat.opacity=opacity;
+    const mesh=place(new THREE.Mesh(geo,mat),0,0,0); mesh.frustumCulled=false; F.details.push(mesh); return mesh;
+  };
+  [-1,1].forEach(side=>{
+    /* Under-eye fold and a short outer-corner crease. */
+    addFold([[side*.008,.929,.006],[side*.014,.927,.006],[side*.021,.928,.005],[side*.027,.931,.003]],.00048,.16);
+    addFold([[side*.024,.937,.005],[side*.028,.939,.004],[side*.031,.941,.002]],.00038,.13);
+    /* Nasolabial fold: from the side of the nose toward the mouth corner. */
+    addFold([[side*.009,.919,.008],[side*.013,.914,.008],[side*.017,.909,.007],[side*.022,.905,.005]],.00052,.17);
+  });
+  /* A very fine lower-lip border helps the mouth read clearly at close range. */
+  addFold([[-.018,.900,.006],[-.010,.898,.007],[0,.897,.007],[.010,.898,.007],[.018,.900,.006]],.00035,.12);
   F.lid=[1,-1].map((s,i)=>{ const z=(i?zeR:zeL); const m=place(new THREE.Mesh(new THREE.CircleGeometry(.5,16),mk(skin,-3)),s*ex,ye,(z<-1e8?zm-H*.05:z)+H*.0025); m.scale.set(lw,.001,1); m.userData.p0=m.position.clone(); return m; });
   F.brow=[1,-1].map((s,i)=>{ const z=(i?zbR:zbL); const m=place(new THREE.Mesh(new THREE.PlaneGeometry(1,1),mk(0x1b130f,-4)),s*ex,yb,(z<-1e8?zm-H*.05:z)+H*.003); m.scale.set(H*.03*A.es*k,H*.0042*k,1); m.userData.y=yb; m.userData.x=s*ex; m.userData.side=s; return m; });
   const NP=11, g=new THREE.BufferGeometry(), P=new Float32Array(NP*2*3+3), I=[]; for(let i=0;i<NP*2;i++){ I.push(NP*2,i,(i+1)%(NP*2)); } g.setAttribute('position',new THREE.BufferAttribute(P,3)); g.setIndex(I);
