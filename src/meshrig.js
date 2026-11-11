@@ -94,8 +94,9 @@ function mfExtend(node,spec){
         P['browIn.'+S1]=[sx*bX*.42,browY,surfZ(sx*bX*.42,browY)]; mkBone('browIn.'+S1,'head',P['browIn.'+S1]);
         P['browOut.'+S1]=[sx*bX*1.22,browY-.002*k,surfZ(sx*bX*1.22,browY-.002*k)]; mkBone('browOut.'+S1,'head',P['browOut.'+S1]);
         P['lidU.'+S1]=[sx*eX,eyeY+.004*k,surfZ(sx*eX,eyeY+.004*k)]; mkBone('lidU.'+S1,'head',P['lidU.'+S1]);
-        P['lidL.'+S1]=[sx*eX,eyeY-.005*k,surfZ(sx*eX,eyeY-.005*k)]; mkBone('lidL.'+S1,'head',P['lidL.'+S1]); });
-      const RAD={lipU:.012,lipL:.012,corner:.019,cheek:.022,browIn:.015,browOut:.017,lidU:.012,lidL:.0085};
+        P['lidL.'+S1]=[sx*eX,eyeY-.005*k,surfZ(sx*eX,eyeY-.005*k)]; mkBone('lidL.'+S1,'head',P['lidL.'+S1]);
+        const nX=sx*.0075*k, nY=ny-.004*k; P['nose.'+S1]=[nX,nY,surfZ(nX,nY)]; mkBone('nose.'+S1,'head',P['nose.'+S1]); });
+      const RAD={lipU:.012,lipL:.012,corner:.019,cheek:.022,browIn:.015,browOut:.017,lidU:.012,lidL:.0085,nose:.0085};
       HVv.forEach(v=>{ if(v[2]<nz-.11*k) return; const x=v[0], y=v[1], z=v[2]; const L2=[];
         /* jaw: everything below the mouth line, fading toward the ears and the neck */
         const wj=mfSmooth(mY+.0015*k,mY-.007*k,y)*(1-mfSmooth(.045*k,.072*k,Math.abs(x)))*mfSmooth(nz-.1*k,nz-.07*k,z)*mfSmooth(chinY-.04*k,chinY-.012*k,y);
@@ -143,7 +144,7 @@ function mfUpdate(t,playing,dt){
     /* only the speaker's mouth moves; listeners keep a still smile or gasp so nobody looks like they are talking */
     const open=Math.max(0,Math.min(1,Math.max(spk?tg[0]+ex.op*.35+pul*.25:Math.min(.1,ex.op*.2),fa[2])));
     st.open+=(open-st.open)*al; st.wid+=(tg[1]-st.wid)*al; st.rnd+=(tg[2]-st.rnd)*al;
-    const set=(n,dx,dy,dz)=>{ const e=E[n]; if(!e) return; const b=e.bone; if(!b.userData.p0) b.userData.p0=b.position.clone(); const ax=mfAxis(1,0,0,rot), az=mfAxis(0,0,1,rot); b.position.copy(b.userData.p0); b.position.x+=(ax.x*dx+az.x*dz)*k; b.position.y+=dy*k; b.position.z+=(ax.z*dx+az.z*dz)*k; };
+    const set=(n,dx,dy,dz)=>{ const e=E[n]; if(!e) return; const b=e.bone; if(!b.userData.p0) b.userData.p0=b.position.clone(); const ax=mfAxis(1,0,0,rot).clone(), az=mfAxis(0,0,1,rot); b.position.copy(b.userData.p0); b.position.x+=(ax.x*dx+az.x*dz)*k; b.position.y+=dy*k; b.position.z+=(ax.z*dx+az.z*dz)*k; };
     if(E.jaw) E.jaw.bone.rotation.set(st.open*.38,0,0);
     const rd=st.rnd, wd=fb[1]+(st.wid-1)*.8, smp=Math.max(0,sm);
     ['L','R'].forEach((S1,i)=>{ const sx=i?-1:1;
@@ -157,6 +158,18 @@ function mfUpdate(t,playing,dt){
     const puck=Math.max(0,Math.min(1,fe[0]||0)), upper=Math.max(-1,Math.min(1,fe[1]||0)), lower=Math.max(-1,Math.min(1,fe[2]||0));
     set('lipU',0,smp*.0008+rd*.0006-Math.max(0,-sm)*.0006+upper*.0022,rd*.0045+puck*.0015);
     set('lipL',0,-rd*.0008+lower*.0022,rd*.004+puck*.0013);
+    /* FACS-style extras (pose face.f..face.j), added on top of the base pose above: per-side smile, jaw and mouth sideways,
+       lip press, cheek puff, wide eyes, nose wrinkle, inner and outer brows */
+    {const ff=PZ['face.f']||Z, fg=PZ['face.g']||Z, fh=PZ['face.h']||Z, fi=PZ['face.i']||Z, fj=PZ['face.j']||Z, cl=v=>Math.max(-1,Math.min(1,v||0));
+      const add=(n,dx,dy,dz)=>{ const e=E[n]; if(!e) return; const b=e.bone, ax=mfAxis(1,0,0,rot).clone(), az=mfAxis(0,0,1,rot); b.position.x+=(ax.x*dx+az.x*dz)*k; b.position.y+=dy*k; b.position.z+=(ax.z*dx+az.z*dz)*k; };
+      if(E.jaw) E.jaw.bone.rotation.y=cl(ff[2])*.12;
+      const ms=cl(fg[0]), lp=Math.max(0,cl(fg[1])), pf=Math.max(0,cl(fg[2])), nw=Math.max(0,cl(fh[2]));
+      ['L','R'].forEach((S1,i)=>{ const sx=i?-1:1, sl=cl(ff[i]), sp=Math.max(0,sl), ew=Math.max(0,cl(fh[i]));
+        set('nose.'+S1,0,0,0);
+        add('corner.'+S1,sx*sl*.0035+ms*.003,sl*.005,sp*.002); add('cheek.'+S1,sx*pf*.004,sp*.004+pf*.001,sp*.0015+pf*.0045);
+        add('lidU.'+S1,0,ew*.0028,0); add('lidL.'+S1,0,-ew*.0016,0); add('nose.'+S1,sx*nw*.0012,nw*.0035,-nw*.0006);
+        add('browIn.'+S1,-sx*cl(fi[i])*.002,cl(fi[i])*.0055,0); add('browOut.'+S1,0,cl(fj[i])*.0055,0); });
+      add('lipU',ms*.003,-lp*.0022,0); add('lipL',ms*.003,lp*.0022,0); }
     /* eyes: real eyeballs look at the speaker (or the one who spoke last when this character is talking) */
     const EY=F.lids&&F.lids.eyes; if(EY&&R.bones&&R.bones.head){ let tgtN=null, last=null;
       for(let i=0;i<caps.length;i++){ const cc=caps[i]; if(cc.t0-.06>t) break; if(cc.who!==nm) last=cc.who; if(t>=cc.t0-.06&&t<=cc.t1+.15&&cc.who!==nm){ tgtN=cc.who; } }

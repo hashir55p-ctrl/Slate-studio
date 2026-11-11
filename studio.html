@@ -244,7 +244,7 @@ details.pnl[open]>summary::before{border:4px solid transparent;border-top:6px so
       </div>
     </aside>
   </div>
-  <footer class="b-stat"><span id="stL">Build 147. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
+  <footer class="b-stat"><span id="stL">Build 148. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
 </div>
 <input type="file" id="glbIn" accept=".glb,.obj,.mtl" multiple hidden>
 <div id="popup" class="popup" hidden></div>
@@ -5308,8 +5308,9 @@ function mfExtend(node,spec){
         P['browIn.'+S1]=[sx*bX*.42,browY,surfZ(sx*bX*.42,browY)]; mkBone('browIn.'+S1,'head',P['browIn.'+S1]);
         P['browOut.'+S1]=[sx*bX*1.22,browY-.002*k,surfZ(sx*bX*1.22,browY-.002*k)]; mkBone('browOut.'+S1,'head',P['browOut.'+S1]);
         P['lidU.'+S1]=[sx*eX,eyeY+.004*k,surfZ(sx*eX,eyeY+.004*k)]; mkBone('lidU.'+S1,'head',P['lidU.'+S1]);
-        P['lidL.'+S1]=[sx*eX,eyeY-.005*k,surfZ(sx*eX,eyeY-.005*k)]; mkBone('lidL.'+S1,'head',P['lidL.'+S1]); });
-      const RAD={lipU:.012,lipL:.012,corner:.019,cheek:.022,browIn:.015,browOut:.017,lidU:.012,lidL:.0085};
+        P['lidL.'+S1]=[sx*eX,eyeY-.005*k,surfZ(sx*eX,eyeY-.005*k)]; mkBone('lidL.'+S1,'head',P['lidL.'+S1]);
+        const nX=sx*.0075*k, nY=ny-.004*k; P['nose.'+S1]=[nX,nY,surfZ(nX,nY)]; mkBone('nose.'+S1,'head',P['nose.'+S1]); });
+      const RAD={lipU:.012,lipL:.012,corner:.019,cheek:.022,browIn:.015,browOut:.017,lidU:.012,lidL:.0085,nose:.0085};
       HVv.forEach(v=>{ if(v[2]<nz-.11*k) return; const x=v[0], y=v[1], z=v[2]; const L2=[];
         /* jaw: everything below the mouth line, fading toward the ears and the neck */
         const wj=mfSmooth(mY+.0015*k,mY-.007*k,y)*(1-mfSmooth(.045*k,.072*k,Math.abs(x)))*mfSmooth(nz-.1*k,nz-.07*k,z)*mfSmooth(chinY-.04*k,chinY-.012*k,y);
@@ -5357,7 +5358,7 @@ function mfUpdate(t,playing,dt){
     /* only the speaker's mouth moves; listeners keep a still smile or gasp so nobody looks like they are talking */
     const open=Math.max(0,Math.min(1,Math.max(spk?tg[0]+ex.op*.35+pul*.25:Math.min(.1,ex.op*.2),fa[2])));
     st.open+=(open-st.open)*al; st.wid+=(tg[1]-st.wid)*al; st.rnd+=(tg[2]-st.rnd)*al;
-    const set=(n,dx,dy,dz)=>{ const e=E[n]; if(!e) return; const b=e.bone; if(!b.userData.p0) b.userData.p0=b.position.clone(); const ax=mfAxis(1,0,0,rot), az=mfAxis(0,0,1,rot); b.position.copy(b.userData.p0); b.position.x+=(ax.x*dx+az.x*dz)*k; b.position.y+=dy*k; b.position.z+=(ax.z*dx+az.z*dz)*k; };
+    const set=(n,dx,dy,dz)=>{ const e=E[n]; if(!e) return; const b=e.bone; if(!b.userData.p0) b.userData.p0=b.position.clone(); const ax=mfAxis(1,0,0,rot).clone(), az=mfAxis(0,0,1,rot); b.position.copy(b.userData.p0); b.position.x+=(ax.x*dx+az.x*dz)*k; b.position.y+=dy*k; b.position.z+=(ax.z*dx+az.z*dz)*k; };
     if(E.jaw) E.jaw.bone.rotation.set(st.open*.38,0,0);
     const rd=st.rnd, wd=fb[1]+(st.wid-1)*.8, smp=Math.max(0,sm);
     ['L','R'].forEach((S1,i)=>{ const sx=i?-1:1;
@@ -5371,6 +5372,18 @@ function mfUpdate(t,playing,dt){
     const puck=Math.max(0,Math.min(1,fe[0]||0)), upper=Math.max(-1,Math.min(1,fe[1]||0)), lower=Math.max(-1,Math.min(1,fe[2]||0));
     set('lipU',0,smp*.0008+rd*.0006-Math.max(0,-sm)*.0006+upper*.0022,rd*.0045+puck*.0015);
     set('lipL',0,-rd*.0008+lower*.0022,rd*.004+puck*.0013);
+    /* FACS-style extras (pose face.f..face.j), added on top of the base pose above: per-side smile, jaw and mouth sideways,
+       lip press, cheek puff, wide eyes, nose wrinkle, inner and outer brows */
+    {const ff=PZ['face.f']||Z, fg=PZ['face.g']||Z, fh=PZ['face.h']||Z, fi=PZ['face.i']||Z, fj=PZ['face.j']||Z, cl=v=>Math.max(-1,Math.min(1,v||0));
+      const add=(n,dx,dy,dz)=>{ const e=E[n]; if(!e) return; const b=e.bone, ax=mfAxis(1,0,0,rot).clone(), az=mfAxis(0,0,1,rot); b.position.x+=(ax.x*dx+az.x*dz)*k; b.position.y+=dy*k; b.position.z+=(ax.z*dx+az.z*dz)*k; };
+      if(E.jaw) E.jaw.bone.rotation.y=cl(ff[2])*.12;
+      const ms=cl(fg[0]), lp=Math.max(0,cl(fg[1])), pf=Math.max(0,cl(fg[2])), nw=Math.max(0,cl(fh[2]));
+      ['L','R'].forEach((S1,i)=>{ const sx=i?-1:1, sl=cl(ff[i]), sp=Math.max(0,sl), ew=Math.max(0,cl(fh[i]));
+        set('nose.'+S1,0,0,0);
+        add('corner.'+S1,sx*sl*.0035+ms*.003,sl*.005,sp*.002); add('cheek.'+S1,sx*pf*.004,sp*.004+pf*.001,sp*.0015+pf*.0045);
+        add('lidU.'+S1,0,ew*.0028,0); add('lidL.'+S1,0,-ew*.0016,0); add('nose.'+S1,sx*nw*.0012,nw*.0035,-nw*.0006);
+        add('browIn.'+S1,-sx*cl(fi[i])*.002,cl(fi[i])*.0055,0); add('browOut.'+S1,0,cl(fj[i])*.0055,0); });
+      add('lipU',ms*.003,-lp*.0022,0); add('lipL',ms*.003,lp*.0022,0); }
     /* eyes: real eyeballs look at the speaker (or the one who spoke last when this character is talking) */
     const EY=F.lids&&F.lids.eyes; if(EY&&R.bones&&R.bones.head){ let tgtN=null, last=null;
       for(let i=0;i<caps.length;i++){ const cc=caps[i]; if(cc.t0-.06>t) break; if(cc.who!==nm) last=cc.who; if(t>=cc.t0-.06&&t<=cc.t1+.15&&cc.who!==nm){ tgtN=cc.who; } }
@@ -5641,12 +5654,20 @@ const FACE_CH=[ /* label, pose key, index, min, max */
   ['Blink left eye','face.a',0,0,1],['Blink right eye','face.a',1,0,1],['Squint both eyes','face.d',2,0,1],
   ['Jaw open','face.a',2,0,1],['Smile (frown below 0)','face.b',0,-1,1],['Mouth wide or narrow','face.b',1,-1,1],['Round mouth (O, U)','face.b',2,0,1],['Lip pucker','face.e',0,0,1],['Upper lip raise','face.e',1,-1,1],['Lower lip drop','face.e',2,-1,1],
   ['Left brow up or down','face.c',0,-1,1],['Right brow up or down','face.c',1,-1,1],['Brows: worried (+) or angry (-)','face.c',2,-1,1],
-  ['Look right or left','face.d',0,-1,1],['Look up or down','face.d',1,-1,1]];
+  ['Look right or left','face.d',0,-1,1],['Look up or down','face.d',1,-1,1],
+  ['Smile left','face.f',0,-1,1],['Smile right','face.f',1,-1,1],['Jaw sideways','face.f',2,-1,1],['Mouth sideways','face.g',0,-1,1],['Lips press together','face.g',1,0,1],['Cheek puff','face.g',2,0,1],
+  ['Eye wide left','face.h',0,0,1],['Eye wide right','face.h',1,0,1],['Nose wrinkle','face.h',2,0,1],['Inner brow left','face.i',0,-1,1],['Inner brow right','face.i',1,-1,1],['Outer brow left','face.j',0,-1,1],['Outer brow right','face.j',1,-1,1]];
 const HAND_CH=[['Thumb curl',0,'a',0],['Index curl',0,'a',1],['Middle curl',0,'a',2],['Ring curl',0,'b',0],['Pinky curl',0,'b',1],['Finger spread',0,'b',2]];
 const HAND_PRE={'Open':[0,0,0,0,0,.6],'Relaxed':[.25,.3,.35,.4,.45,0],'Fist':[.8,1,1,1,1,0],'Point':[.8,0,1,1,1,0],'Thumbs up':[0,1,1,1,1,0],'Pinch':[.55,.55,.2,.1,.1,0],'Peace':[.8,0,0,1,1,.8]};
 const MOUTH_PRE={'Rest':{'face.a':[0,0,0],'face.b':[0,0,0]},'A (open)':{'face.a':[0,0,.8],'face.b':[0,.2,0]},'E (wide)':{'face.a':[0,0,.35],'face.b':[.2,.8,0]},'O (round)':{'face.a':[0,0,.55],'face.b':[0,-.2,.9]},'U (pucker)':{'face.a':[0,0,.2],'face.b':[0,-.6,1],'face.e':[.9,0,0]},'M (closed)':{'face.a':[0,0,0],'face.b':[-.05,-.1,0],'face.e':[.2,0,0]},'F or V':{'face.a':[0,0,.1],'face.b':[.1,.3,0],'face.e':[0,.45,.25]}};
 const EYE_PRE={'Center':[0,0,0],'Look left':[.8,0,0],'Look right':[-.8,0,0],'Look up':[0,.8,0],'Look down':[0,-.8,0],'Soft squint':[0,0,.35],'Tight squint':[0,0,.8]};
-const FACE_PRE={'Neutral':{},'Happy':{'face.b':[.7,.3,0],'face.c':[.15,.15,0]},'Laugh':{'face.a':[0,0,.55],'face.b':[1,.5,0],'face.c':[.3,.3,0],'face.d':[0,0,.5]},'Surprised':{'face.a':[0,0,.6],'face.b':[0,-.2,.5],'face.c':[1,1,.4]},'Skeptic':{'face.b':[-.15,0,0],'face.c':[0,.9,0],'face.d':[0,0,.25]},'Worried':{'face.b':[-.3,-.1,0],'face.c':[.35,.35,.9]},'Excited':{'face.a':[0,0,.2],'face.b':[.8,.4,0],'face.c':[.5,.5,0]},'Annoyed':{'face.b':[-.45,0,0],'face.c':[-.3,-.3,-.8],'face.d':[0,0,.35]},'Smug':{'face.b':[.5,.1,0],'face.c':[0,.5,0],'face.d':[0,0,.3]},'Sleepy':{'face.a':[.9,.9,0],'face.b':[0,0,0]}};
+const FACE_PRE={'Neutral':{},'Happy':{'face.b':[.7,.3,0],'face.c':[.15,.15,0]},'Laugh':{'face.a':[0,0,.55],'face.b':[1,.5,0],'face.c':[.3,.3,0],'face.d':[0,0,.5]},'Surprised':{'face.a':[0,0,.6],'face.b':[0,-.2,.5],'face.c':[1,1,.4]},'Skeptic':{'face.b':[-.15,0,0],'face.c':[0,.9,0],'face.d':[0,0,.25]},'Worried':{'face.b':[-.3,-.1,0],'face.c':[.35,.35,.9]},'Excited':{'face.a':[0,0,.2],'face.b':[.8,.4,0],'face.c':[.5,.5,0]},'Annoyed':{'face.b':[-.45,0,0],'face.c':[-.3,-.3,-.8],'face.d':[0,0,.35]},'Smug':{'face.b':[.5,.1,0],'face.c':[0,.5,0],'face.d':[0,0,.3]},'Sleepy':{'face.a':[.9,.9,0],'face.b':[0,0,0]},
+  'Angry':{'face.b':[-.5,.1,0],'face.c':[-.6,-.6,-.9],'face.d':[0,0,.4],'face.g':[0,.5,0],'face.h':[0,0,.5,],'face.i':[-.6,-.6,0]},
+  'Sad':{'face.b':[-.5,-.2,0],'face.c':[.2,.2,.9],'face.i':[.8,.8,0],'face.f':[-.4,-.4,0]},
+  'Disgust':{'face.b':[-.35,0,0],'face.c':[-.2,-.2,-.4],'face.d':[0,0,.45],'face.h':[0,0,.9],'face.g':[0,0,0]},
+  'Fear':{'face.a':[0,0,.35],'face.b':[-.2,.6,0],'face.c':[.8,.8,.7],'face.h':[.9,.9,0],'face.i':[.7,.7,0]},
+  'Smirk':{'face.f':[.8,-.1,0],'face.g':[.2,0,0],'face.c':[0,.4,0]},
+  'Pout':{'face.b':[-.3,-.4,.6],'face.e':[.8,0,-.3],'face.g':[0,.3,.3]}};
 const faceUi={hand:'L',fields:[],hfields:[]};
 function faceNode(){ const n=S.sel&&nodes.get(S.sel); return n&&n.userData.rig&&(n.userData.rig.creator||n.userData.rig.mf)?n:null; }
 function facePose(n){ const sp=n.userData.spec; return sp.pose||(sp.pose={}); }
@@ -5661,12 +5682,12 @@ function buildFacePane(){
   const host=document.createElement('div'); host.className='pane'; host.id='pFace'; host.hidden=true; $('#pAi').parentNode.appendChild(host);
   const stat=noteEl(''); stat.style.color='var(--fg)'; faceUi.stat=stat;
   faceUi.fields=FACE_CH.map(c=>rangeField(c[0],c[3],c[4],.01,()=>faceGet(c[1],c[2]),v=>faceSet(c[1],c[2],v),v=>v.toFixed(2),faceCommit));
-  const exp=document.createElement('div'); exp.className='g2'; Object.keys(FACE_PRE).forEach(k=>exp.appendChild(scBtn(k,()=>faceApplyMap(FACE_PRE[k],['face.a','face.b','face.c','face.d']))));
+  const exp=document.createElement('div'); exp.className='g2'; Object.keys(FACE_PRE).forEach(k=>exp.appendChild(scBtn(k,()=>faceApplyMap(FACE_PRE[k],['face.a','face.b','face.c','face.d','face.f','face.g','face.h','face.i','face.j']))));
   const mo=document.createElement('div'); mo.className='g2'; Object.keys(MOUTH_PRE).forEach(k=>mo.appendChild(scBtn(k,()=>faceApplyMap(MOUTH_PRE[k],['face.a','face.b','face.e']))));
   const eyes=document.createElement('div'); eyes.className='g2'; Object.keys(EYE_PRE).forEach(k=>eyes.appendChild(scBtn(k,()=>faceApplyMap({'face.d':EYE_PRE[k]},['face.d']))));
   const blink=scBtn('Blink (key closed, then open)',()=>{ const n=faceNode(); if(!n) return; const p=facePose(n), f=Math.round(S.fps*.12)/S.fps, t0=S.t; const a=(p['face.a']||[0,0,0]).slice(); [[t0,0],[t0+f,1],[t0+2*f,0]].forEach(x=>{ p['face.a']=[x[1],x[1],a[2]]; S.t=Math.min(S.duration,x[0]); addKey(n.userData.id); }); S.t=t0; p['face.a']=a; facePaneSync(); queueSave(); },'hi');
   const keyb=scBtn('Set key at playhead',()=>{ const n=faceNode(); if(n){ addKey(n.userData.id); toast('Face and hands keyed at '+S.t.toFixed(2)+' s.'); } },'hi');
-  const reset=scBtn('Reset face',()=>faceApplyMap({},['face.a','face.b','face.c','face.d','face.e']));
+  const reset=scBtn('Reset face',()=>faceApplyMap({},['face.a','face.b','face.c','face.d','face.e','face.f','face.g','face.h','face.i','face.j']));
   const side=document.createElement('div'); side.className='g2'; const sb={}; ['L','R','Both'].forEach(s=>{ sb[s]=scBtn(s==='L'?'Left hand':s==='R'?'Right hand':'Both hands',()=>{ faceUi.hand=s; Object.keys(sb).forEach(k=>sb[k].classList.toggle('on',k===s)); facePaneSync(); }); side.appendChild(sb[s]); }); sb.L.classList.add('on');
   const sides=()=>faceUi.hand==='Both'?['L','R']:[faceUi.hand];
   faceUi.hfields=HAND_CH.map(c=>rangeField(c[0],c[0]==='Finger spread'?-1:0,1,.01,()=>{ const s=sides()[0], n=faceNode(), p=n&&n.userData.spec.pose, e=p&&p[handKey(s,c[2])]; return e?e[c[3]]:0; },v=>{ const n=faceNode(); if(!n) return; const p=facePose(n); sides().forEach(s=>{ const e=p[handKey(s,c[2])]||(p[handKey(s,c[2])]=[0,0,0]); e[c[3]]=v; }); rigApply(n); },v=>v.toFixed(2),faceCommit));
@@ -6952,7 +6973,7 @@ async function chatRun(d){
   if($('#selAspect').value!==String(S.aspect)) $('#selAspect').value='2.39';
   applyLook(); refreshLook(); applyQuality(); setView('free'); setMode('translate');
   applyTracks(0); renderTimeline(); renderOutliner(); renderProps(); showTab('render'); fit(); rebuildEnv();
-  $('#stL').textContent='Build 147 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
+  $('#stL').textContent='Build 148 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
   try{ if(location.hash==='#dev') window.__dev={S,nodes,scene,edit,cinema,orbit,renderer,THREE,get:id=>nodes.get(id),sc:{scRefine,scSetTopo,scAdj,scUpdate}}; }catch(e){}
   try{ loadEmbedded(); }catch(e){}
   try{ if(!saved&&!localStorage.getItem('slate-welcome-v1')){ localStorage.setItem('slate-welcome-v1','1'); setTimeout(showWelcome,500); } }catch(e){ if(!saved) setTimeout(showWelcome,500); }

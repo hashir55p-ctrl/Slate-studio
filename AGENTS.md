@@ -48,3 +48,8 @@ Slate Studio is a Blender-like 3D animation/sculpting app that runs in one web p
 - `src/impmodel.js`: Import model (GLB or OBJ+MTL). OBJ is converted to GLB in memory (o/g names become mesh names, `v x y z r g b` vertex colours kept). Imported bytes are stored in IndexedDB key `imp:<key>`; the node is a normal `glb` spec with `imp` and an `EMBED_GLB` entry (`impKey`). `impRestore()` runs from `scIdbRestore()` at startup.
 - `src/chainrig.js` additions: chain keyframes (`spec.chk`, Rig tab > Hair and cloth > Key at playhead) and capsule collision against body bones (`chColliders`, `chCollide`; head/neck skipped for hair chains).
 - Textures are not imported from OBJ/MTL yet (only Kd colours and vertex colours).
+
+## Build 148 - Blender-style face controls
+- `src/meshrig.js`: new `nose.L/R` face bones; extra pose channels `face.f` (smile L, smile R, jaw sideways), `face.g` (mouth sideways, lips press, cheek puff), `face.h` (eye wide L/R, nose wrinkle), `face.i` (inner brow L/R), `face.j` (outer brow L/R), applied after the base pose in `mfUpdate`. Fixed shared-vector bug (`mfAxis` result must be cloned) so sideways bone moves actually happen.
+- `src/facepanel.js`: 13 new sliders, new presets (Angry, Sad, Disgust, Fear, Smirk, Pout). All are keyable via the existing Set key.
+- Works on rigged meshes with the mesh face rig (`rig.mf.face`); the older Character creator rig ignores the new channels.
