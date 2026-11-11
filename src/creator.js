@@ -1,29 +1,55 @@
 /* ---------- character creator: parametric humanoid with the studio skeleton + a real face rig ---------- */
-const CR_DEF={name:'New character',bodyType:'masculine',height:1.75,build:1,shoulders:1,head:1,waist:1,hips:1,chest:1,bust:1,skin:'#c8946b',hair:'short',hairColor:'#1d1511',shirt:'#3f6fb0',pants:'#2b2f3a',shoes:'#1a1a1a',eyes:'#4a3020',brow:'#1d1511',beard:'none',glasses:'none',top:'tee',backpack:'no',fit:1,shoeStyle:'plain'};
+const CR_DEF={name:'New character',bodyType:'masculine',height:1.75,build:1,shoulders:1,head:1,waist:1,hips:1,chest:1,bust:1,skin:'#c8946b',hair:'short',hairColor:'#1d1511',shirt:'#3f6fb0',pants:'#2b2f3a',shoes:'#1a1a1a',eyes:'#4a3020',brow:'#1d1511',beard:'none',glasses:'none',top:'tee',backpack:'no',fit:1,shoeStyle:'plain',freckles:.25,flush:.3};
 const CR_VIS=[[0,1,0],[1,1.05,0],[.5,1.25,0],[.3,1.35,0],[.65,.9,.8],[.35,.8,1],[.12,1.2,0],[0,1,0]];   /* open, width, round per viseme code */
 function crMat(c,r,m){ return new THREE.MeshStandardMaterial({color:lin(c),roughness:r==null?.7:r,metalness:m||0}); }
-/* Build 127: subtle, tileable micro-surface for skin. The grayscale map is used
-   only for bump/roughness, so it does not tint the chosen skin colour. */
-function crSkinMat(c){
-  const size=256, cv=document.createElement('canvas'); cv.width=cv.height=size;
-  const cx=cv.getContext('2d'), im=cx.createImageData(size,size), d=im.data;
-  let seed=127; const rnd=()=>{ seed=(seed*1664525+1013904223)>>>0; return seed/4294967296; };
-  for(let y=0;y<size;y++) for(let x=0;x<size;x++){
-    const i=(y*size+x)*4, n=(rnd()-.5)*13;
-    const wave=Math.sin(x*.31+Math.sin(y*.17)*1.7)*1.8+Math.sin(y*.27+x*.09)*1.2;
-    const v=Math.max(0,Math.min(255,226+n+wave)); d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
+/* Build 145: human skin. Tileable colour, bump and roughness maps built from
+   periodic blobs (wrapped at the tile edges so there are no seams): cheek-style flush
+   mottling, freckles in clusters, a faint capillary red, pores, fine skin lines and
+   one small mole. Colour map is a multiply layer around white so the chosen skin tone
+   stays in charge. Maps are cached per (freckles, flush) pair. */
+const CR_SKINCACHE={};
+function crSkinMaps(fr,fl){
+  const key=(Math.round(fr*20))+'_'+(Math.round(fl*20)); if(CR_SKINCACHE[key]) return CR_SKINCACHE[key];
+  const S=512; let seed=145+Math.round(fr*20)*7+Math.round(fl*20)*13; const rnd=()=>{ seed=(seed*1664525+1013904223)>>>0; return seed/4294967296; };
+  const mk=()=>{ const c=document.createElement('canvas'); c.width=c.height=S; return c; };
+  const wrap=(cx,x,y,fn)=>{ for(const dx of [-S,0,S]) for(const dy of [-S,0,S]) fn(x+dx,y+dy); };
+  const blob=(cx,x,y,r,rgb,a)=>wrap(cx,x,y,(X,Y)=>{ if(X<-r||Y<-r||X>S+r||Y>S+r) return; const g=cx.createRadialGradient(X,Y,0,X,Y,r); g.addColorStop(0,'rgba('+rgb+','+a+')'); g.addColorStop(1,'rgba('+rgb+',0)'); cx.fillStyle=g; cx.beginPath(); cx.arc(X,Y,r,0,6.2832); cx.fill(); });
+  /* colour (multiply layer) */
+  const cc=mk(), cx=cc.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,S,S);
+  cx.globalCompositeOperation='multiply';
+  for(let i=0;i<10;i++) blob(cx,rnd()*S,rnd()*S,60+rnd()*90,'236,168,158',.10+.30*fl);        /* flush / redness patches */
+  for(let i=0;i<70;i++) blob(cx,rnd()*S,rnd()*S,8+rnd()*22,'226,150,140',.05+.12*fl);          /* capillary mottling */
+  for(let i=0;i<24;i++) blob(cx,rnd()*S,rnd()*S,14+rnd()*30,'238,214,196',.10);                /* paler areas */
+  const nCl=3+Math.round(fr*6);
+  for(let k=0;k<nCl;k++){ const cxx=rnd()*S, cyy=rnd()*S, rad=40+rnd()*70, n=Math.round(fr*55);
+    for(let i=0;i<n;i++){ const a=rnd()*6.2832, d=Math.sqrt(rnd())*rad; blob(cx,cxx+Math.cos(a)*d,cyy+Math.sin(a)*d,1.6+rnd()*2.6,'176,104,70',.30+rnd()*.35); } }
+  for(let i=0;i<Math.round(fr*260);i++) blob(cx,rnd()*S,rnd()*S,1+rnd()*1.6,'190,128,92',.25+rnd()*.3);   /* sparse single freckles */
+  for(let i=0;i<1500;i++){ const x=rnd()*S,y=rnd()*S; cx.fillStyle='rgba(150,95,80,'+(.07+rnd()*.09)+')'; cx.beginPath(); cx.arc(x,y,.5+rnd()*.7,0,6.2832); cx.fill(); }   /* pore tint */
+  blob(cx,S*.62,S*.37,3.2,'92,50,38',.85);                                                     /* one mole */
+  cx.globalCompositeOperation='source-over';
+  /* bump + roughness */
+  const bc=mk(), bx=bc.getContext('2d'), im=bx.createImageData(S,S), d=im.data;
+  const ph=[rnd()*6.28,rnd()*6.28,rnd()*6.28];
+  for(let y=0;y<S;y++) for(let x=0;x<S;x++){
+    const i=(y*S+x)*4, u=x/S*6.2832, v=y/S*6.2832;
+    const lines=Math.sin(u*9+Math.sin(v*5+ph[0])*1.6+ph[1])*Math.sin(v*11+Math.sin(u*4+ph[2])*1.4)*5;     /* fine crossed skin lines */
+    const w=Math.sin(u*3+ph[0])*Math.sin(v*3+ph[1])*5;                                                       /* gentle undulation */
+    const n=(rnd()-.5)*10; const val=Math.max(0,Math.min(255,214+lines+w+n)); d[i]=d[i+1]=d[i+2]=val; d[i+3]=255;
   }
-  cx.putImageData(im,0,0);
-  /* Tiny irregular pore marks, sparse enough to avoid a stippled appearance. */
-  for(let i=0;i<760;i++){
-    const x=rnd()*size,y=rnd()*size,r=.35+rnd()*.75;
-    cx.fillStyle=rnd()>.48?'rgba(35,25,20,.20)':'rgba(255,255,255,.20)';
-    cx.beginPath(); cx.ellipse(x,y,r,r*(.65+rnd()*.7),rnd()*Math.PI,0,Math.PI*2); cx.fill();
-  }
-  const tex=new THREE.CanvasTexture(cv); tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
-  tex.repeat.set(2,2); tex.generateMipmaps=true; tex.minFilter=THREE.LinearMipmapLinearFilter;
-  const mat=crMat(c,.7,0); mat.bumpMap=tex; mat.bumpScale=.00055; mat.roughnessMap=tex; mat.roughness=.72;
-  mat.userData.skinMicroTexture=true; mat.needsUpdate=true; return mat;
+  bx.putImageData(im,0,0);
+  bx.globalCompositeOperation='source-over';
+  for(let i=0;i<2600;i++){ const x=rnd()*S,y=rnd()*S,r=.8+rnd()*1.2; wrap(bx,x,y,(X,Y)=>{ const g=bx.createRadialGradient(X,Y,0,X,Y,r*1.6); g.addColorStop(0,'rgba(60,60,60,.55)'); g.addColorStop(1,'rgba(60,60,60,0)'); bx.fillStyle=g; bx.beginPath(); bx.arc(X,Y,r*1.6,0,6.2832); bx.fill(); }); }   /* pores */
+  const tx=(c,srgb)=>{ const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(3,3); t.generateMipmaps=true; t.minFilter=THREE.LinearMipmapLinearFilter; t.anisotropy=4; if(srgb) t.encoding=THREE.sRGBEncoding; return t; };
+  return CR_SKINCACHE[key]={color:tx(cc,true),bump:tx(bc,false)};
+}
+function crSkinMat(c,fr,fl){
+  fr=fr==null?.25:+fr; fl=fl==null?.3:+fl;
+  const m=crSkinMaps(fr,fl);
+  const mat=new THREE.MeshPhysicalMaterial({color:lin(c),roughness:.62,metalness:0});
+  mat.map=m.color; mat.bumpMap=m.bump; mat.bumpScale=.0011; mat.roughnessMap=m.bump;
+  mat.clearcoat=.07; mat.clearcoatRoughness=.55;                                   /* faint oily sheen */
+  if(mat.sheen!==undefined){ mat.sheen=new THREE.Color(.55,.2,.16); }            /* warm, SSS-like edge */
+  mat.userData.skinMicroTexture=true; mat.userData.humanSkin=true; mat.needsUpdate=true; return mat;
 }
 function crMakeTorsoMesh(root,bones,boneList,H,B,SH,waistW,hipW,chestW,feminine,bust,mat){
   /* Build 106: denser torso rings and a softly shaped front/back profile.
@@ -214,7 +240,7 @@ function crBuild(node,spec){
   const root=new THREE.Object3D(); root.name='rigRoot'; root.userData.rigOwned=true; node.add(root);
   const P={}; RIG_DEF.forEach(d=>{ P[d[0]]=[d[2].slice(),d[3].slice()]; });
   RIG_DEF.forEach(d=>{ if(d[0].indexOf('upperArm')===0){ const s=d[0].endsWith('.L')?1:-1; P[d[0]][0][0]=.14*SH*s; P['foreArm'+d[0].slice(8)][0][0]=P[d[0]][1][0]=.155*SH*s; P['hand'+d[0].slice(8)][0][0]=P['foreArm'+d[0].slice(8)][1][0]=.165*SH*s; } });
-  const skin=crSkinMat(o.skin), cloth=crMat(o.shirt,.85), pants=crMat(o.pants,.85), shoes=crMat(o.shoes,.6), hairM=crMat(o.hairColor,.55), lipM=crMat('#a2524f',.5);
+  const skin=crSkinMat(o.skin,o.freckles,o.flush), cloth=crMat(o.shirt,.85), pants=crMat(o.pants,.85), shoes=crMat(o.shoes,.6), hairM=crMat(o.hairColor,.55), lipM=crMat('#a2524f',.5);
   const bones={}, list=[], markers=[], lines=[], head={};
   const mkMat=new THREE.MeshBasicMaterial({color:0xffcc33,depthTest:false,transparent:true,opacity:.95}), lnMat=new THREE.LineBasicMaterial({color:0xffffff,depthTest:false,transparent:true,opacity:.8});
   RIG_DEF.forEach(d=>{ const b=new THREE.Bone(); b.name=d[0]; const hp=P[d[0]][0].map(v=>v*H), tp=P[d[0]][1].map(v=>v*H); head[d[0]]=hp;
@@ -785,7 +811,7 @@ function crPanel(){
   let ov=document.getElementById('crOv'); if(ov){ ov.remove(); return; }
   const sel=S.sel&&nodes.get(S.sel), edit=sel&&sel.userData.type==='creator'?sel:null, cur=Object.assign({},CR_DEF,edit?edit.userData.spec.creator:{});
   ov=document.createElement('div'); ov.id='crOv'; ov.style.cssText='position:fixed;right:10px;top:56px;bottom:10px;width:min(330px,92vw);z-index:60;background:var(--panel,#1d1f24);color:var(--fg,#e8e8ea);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:12px;overflow:auto;font:13px system-ui;box-shadow:0 8px 30px rgba(0,0,0,.5)';
-  const rows=[['name','Name','text'],['bodyType','Body shape',['masculine','feminine']],['height','Height (m)',[1.4,2.1,.01]],['build','Build',[.75,1.4,.01]],['shoulders','Shoulders',[.85,1.25,.01]],['waist','Waist',[.75,1.3,.01]],['hips','Hips',[.75,1.35,.01]],['chest','Chest width',[.75,1.3,.01]],['bust','Bust volume',[.55,1.45,.01]],['head','Head size',[.9,1.2,.01]],['skin','Skin','color'],['hair','Hair',['short','fade','sidepart','curly','long','braids','ponytail','cap','none']],['beard','Beard',['none','stubble','full']],['glasses','Glasses',['none','round']],['top','Top style',['tee','hoodie']],['backpack','Backpack',['no','yes']],['fit','Trouser fit',[.9,1.4,.01]],['shoeStyle','Shoes style',['plain','sneaker','bare']],['hairColor','Hair colour','color'],['brow','Brow colour','color'],['eyes','Eye colour','color'],['shirt','Top','color'],['pants','Trousers','color'],['shoes','Shoes','color']];
+  const rows=[['name','Name','text'],['bodyType','Body shape',['masculine','feminine']],['height','Height (m)',[1.4,2.1,.01]],['build','Build',[.75,1.4,.01]],['shoulders','Shoulders',[.85,1.25,.01]],['waist','Waist',[.75,1.3,.01]],['hips','Hips',[.75,1.35,.01]],['chest','Chest width',[.75,1.3,.01]],['bust','Bust volume',[.55,1.45,.01]],['head','Head size',[.9,1.2,.01]],['skin','Skin','color'],['freckles','Freckles',[0,1,.01]],['flush','Skin flush',[0,1,.01]],['hair','Hair',['short','fade','sidepart','curly','long','braids','ponytail','cap','none']],['beard','Beard',['none','stubble','full']],['glasses','Glasses',['none','round']],['top','Top style',['tee','hoodie']],['backpack','Backpack',['no','yes']],['fit','Trouser fit',[.9,1.4,.01]],['shoeStyle','Shoes style',['plain','sneaker','bare']],['hairColor','Hair colour','color'],['brow','Brow colour','color'],['eyes','Eye colour','color'],['shirt','Top','color'],['pants','Trousers','color'],['shoes','Shoes','color']];
   const val={}; Object.keys(cur).forEach(k=>{ val[k]=cur[k]; });
   let h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Character creator</b><button id="crX" style="background:none;border:0;color:inherit;font-size:18px">✕</button></div><div style="opacity:.7;margin-bottom:8px">Full skeleton, jaw, eyes, eyelids and brows. Poses, tracks and the voice lip sync all work on it.</div>';
   ov.innerHTML=h; const box=document.createElement('div'); ov.appendChild(box);
