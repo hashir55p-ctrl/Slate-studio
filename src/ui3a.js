@@ -144,7 +144,7 @@ function tick(now){
   }
   try{ auUpdate(S.t,S.playing); }catch(e){} try{ capUpdate(S.t); }catch(e){} try{ voiceUpdate(S.t,S.playing); }catch(e){} try{ crUpdate(S.t,S.playing,dt); }catch(e){ if(!window._crE){ window._crE=1; console.warn('creator',e); } } try{ mfUpdate(S.t,S.playing,dt); }catch(e){ if(!window._mfE){ window._mfE=1; console.warn('meshface',e); } }
   WT.value=now/1000; if(kochiOn) kochiAnim(now/1000);
-  walkPose(); updateRig(); try{ if(window.chStep) chStep(dt); }catch(e){}
+  walkPose(); updateRig(); try{ if(window.chStep) chStep(dt); }catch(e){} try{ if(window.equipStep) equipStep(dt); }catch(e){ if(!window.__eqErr){ window.__eqErr=1; console.warn("equip",e); } }
   order.forEach(id=>{ const n=nodes.get(id); if(n&&n.userData.mixer) n.userData.mixer.setTime(S.t); });
   const act=S.view==='cam'?cinema:edit;
   renderPass.camera=act; bokeh.camera=act; bokeh.uniforms.nearClip.value=act.near; bokeh.uniforms.farClip.value=act.far;

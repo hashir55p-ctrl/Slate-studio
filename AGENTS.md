@@ -53,3 +53,9 @@ Slate Studio is a Blender-like 3D animation/sculpting app that runs in one web p
 - `src/meshrig.js`: new `nose.L/R` face bones; extra pose channels `face.f` (smile L, smile R, jaw sideways), `face.g` (mouth sideways, lips press, cheek puff), `face.h` (eye wide L/R, nose wrinkle), `face.i` (inner brow L/R), `face.j` (outer brow L/R), applied after the base pose in `mfUpdate`. Fixed shared-vector bug (`mfAxis` result must be cloned) so sideways bone moves actually happen.
 - `src/facepanel.js`: 13 new sliders, new presets (Angry, Sad, Disgust, Fear, Smirk, Pout). All are keyable via the existing Set key.
 - Works on rigged meshes with the mesh face rig (`rig.mf.face`); the older Character creator rig ignores the new channels.
+
+## Build 149 - Equipment (src/equip.js)
+- Imported GLB/OBJ nodes can be equipped on a rigged character (Rig tab, "Equipment" panel; API `equipSet(id,slot,charId)`, `equipOff(id)`). Slots: necklace, pendant, glasses, hat, watchL/R, backpack, belt. State in `spec.eq` (to, slot, sz,dx,dy,dz,rx,ry,rz, nw,dr,fw,th).
+- The original model meshes are hidden and copied into a carrier on a bone, rebuilt whenever `eqKey` changes (settings, bone identity, necklace settings). `equipStep(dt)` runs each frame next to `chStep`.
+- Necklace: a straight chain (longest axis) is bent along a path that hugs the body surface (`eqBodyPts`: skinned body vertices in chest-bone space; neck = lowest narrow height) and dips into a V; chain is scaled to fit the path length. Pendant hangs at the V point and swings (verlet pendulum; rests against the chest). Swing is not frame-deterministic.
+- Test hook: `window.__jb.kun()` loads the bare base male.
