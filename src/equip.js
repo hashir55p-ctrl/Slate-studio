@@ -118,7 +118,7 @@ function equipStep(dt){
   nodes.forEach(n=>{ const sp=n.userData.spec; if(!sp||!sp.eq) return;
     const key=eqKey(n); if(n.userData.eqKey!==key){ if(eqBuild(n)) n.userData.eqKey=key; else return; }
     const pd=n.userData.eqPend, car=n.userData.eqCar; if(!pd||!car) return; dt=Math.min(.05,dt||.033);
-    const bone=n.userData.eqBone; bone.updateMatrixWorld(true); car.getWorldPosition(_eqW); bone.getWorldQuaternion(_eqQ); bone.getWorldScale(_eqS); const L=Math.max(1e-4,pd.L*_eqS.y);
+    const bone=n.userData.eqBone; bone.updateWorldMatrix(true,false); car.updateWorldMatrix(false,false); car.getWorldPosition(_eqW); bone.getWorldQuaternion(_eqQ); bone.getWorldScale(_eqS); const L=Math.max(1e-4,pd.L*_eqS.y);
     if(!pd.st){ pd.st={q:_eqW.clone().add(new THREE.Vector3(0,-L,0)),p:null}; pd.st.p=pd.st.q.clone(); }
     const st=pd.st; _eqD.subVectors(st.q,st.p).multiplyScalar(.965); st.p.copy(st.q); st.q.add(_eqD); st.q.y-=9.8*dt*dt*.5;
     _eqD.subVectors(st.q,_eqW).normalize(); const inv=_eqQ.clone().invert(); _eqD.applyQuaternion(inv);

@@ -244,7 +244,7 @@ details.pnl[open]>summary::before{border:4px solid transparent;border-top:6px so
       </div>
     </aside>
   </div>
-  <footer class="b-stat"><span id="stL">Build 152. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
+  <footer class="b-stat"><span id="stL">Build 153. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
 </div>
 <input type="file" id="glbIn" accept=".glb,.obj,.mtl" multiple hidden>
 <div id="popup" class="popup" hidden></div>
@@ -1179,7 +1179,8 @@ function wire(){
 let last=performance.now();
 function tick(now){
   requestAnimationFrame(tick);
-  const dt=Math.min(S.vo?0.6:0.1,(now-last)/1000); last=now;
+  if(window.__hold){ if(!window.__step) return; window.__step=0; } /* test and video capture: advance one frame per request */
+  const dt=window.__dtFix||Math.min(S.vo?0.6:0.1,(now-last)/1000); last=now;
   if(S.playing){
     S.t+=dt; try{ const vc=vbClock(); if(vc!=null&&Math.abs(vc-S.t)<2) S.t=vc; }catch(e){}
     if(S.t>=S.duration){
@@ -5735,7 +5736,7 @@ function equipStep(dt){
   nodes.forEach(n=>{ const sp=n.userData.spec; if(!sp||!sp.eq) return;
     const key=eqKey(n); if(n.userData.eqKey!==key){ if(eqBuild(n)) n.userData.eqKey=key; else return; }
     const pd=n.userData.eqPend, car=n.userData.eqCar; if(!pd||!car) return; dt=Math.min(.05,dt||.033);
-    const bone=n.userData.eqBone; bone.updateMatrixWorld(true); car.getWorldPosition(_eqW); bone.getWorldQuaternion(_eqQ); bone.getWorldScale(_eqS); const L=Math.max(1e-4,pd.L*_eqS.y);
+    const bone=n.userData.eqBone; bone.updateWorldMatrix(true,false); car.updateWorldMatrix(false,false); car.getWorldPosition(_eqW); bone.getWorldQuaternion(_eqQ); bone.getWorldScale(_eqS); const L=Math.max(1e-4,pd.L*_eqS.y);
     if(!pd.st){ pd.st={q:_eqW.clone().add(new THREE.Vector3(0,-L,0)),p:null}; pd.st.p=pd.st.q.clone(); }
     const st=pd.st; _eqD.subVectors(st.q,st.p).multiplyScalar(.965); st.p.copy(st.q); st.q.add(_eqD); st.q.y-=9.8*dt*dt*.5;
     _eqD.subVectors(st.q,_eqW).normalize(); const inv=_eqQ.clone().invert(); _eqD.applyQuaternion(inv);
@@ -6173,7 +6174,7 @@ function loadJesvinBase(){
   refreshScene(); selectId(sp.id); applyLook(); saveNow();
   toast('Jesvin (on the base male) is loading. Give it a second to dress.');
 }
-window.__jb={dress:jbDress,tick:jbaseTick,JB:JB,load:loadJesvinBase}; window.jbaseTick=jbaseTick; window.__jb.kun=function(){ loadBaseKun(); };
+window.__jb={dress:jbDress,tick:jbaseTick,JB:JB,load:loadJesvinBase}; window.jbaseTick=jbaseTick; window.__jb.kun=function(){ loadBaseKun(); }; window.__jb.stany=function(){ loadStany(); }; window.__jb.setView=function(v){ setView(v); }; window.__jb.rigPose=function(n,p){ rigPoseSet(n,p); };
 window.__jb.nodes=()=>nodes; window.__jb.cam=function(a,t){ orbit.target.set(t[0],t[1],t[2]); edit.position.set(a[0],a[1],a[2]); orbit.update(); };
 window.__jb.scNew=function(s,d){ SCU.detail=d||"high"; scNew(s); };
 window.__jb.rigSculpt=function(){ const id=S.sel, n=nodes.get(id); if(!n) return 'no sel'; const sp=n.userData.spec; sp.rig={rot:0}; const nn=rigRebuild(id); return Object.keys((nn.userData.rig||{}).bones||{}).length; };
@@ -7133,7 +7134,7 @@ async function chatRun(d){
   if($('#selAspect').value!==String(S.aspect)) $('#selAspect').value='2.39';
   applyLook(); refreshLook(); applyQuality(); setView('free'); setMode('translate');
   applyTracks(0); renderTimeline(); renderOutliner(); renderProps(); showTab('render'); fit(); rebuildEnv();
-  $('#stL').textContent='Build 152 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
+  $('#stL').textContent='Build 153 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
   try{ if(location.hash==='#dev') window.__dev={S,nodes,scene,edit,cinema,orbit,renderer,THREE,get:id=>nodes.get(id),sc:{scRefine,scSetTopo,scAdj,scUpdate}}; }catch(e){}
   try{ loadEmbedded(); }catch(e){}
   try{ if(!saved&&!localStorage.getItem('slate-welcome-v1')){ localStorage.setItem('slate-welcome-v1','1'); setTimeout(showWelcome,500); } }catch(e){ if(!saved) setTimeout(showWelcome,500); }

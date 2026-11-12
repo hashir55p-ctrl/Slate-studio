@@ -132,7 +132,8 @@ function wire(){
 let last=performance.now();
 function tick(now){
   requestAnimationFrame(tick);
-  const dt=Math.min(S.vo?0.6:0.1,(now-last)/1000); last=now;
+  if(window.__hold){ if(!window.__step) return; window.__step=0; } /* test and video capture: advance one frame per request */
+  const dt=window.__dtFix||Math.min(S.vo?0.6:0.1,(now-last)/1000); last=now;
   if(S.playing){
     S.t+=dt; try{ const vc=vbClock(); if(vc!=null&&Math.abs(vc-S.t)<2) S.t=vc; }catch(e){}
     if(S.t>=S.duration){

@@ -128,7 +128,7 @@ function loadJesvinBase(){
   refreshScene(); selectId(sp.id); applyLook(); saveNow();
   toast('Jesvin (on the base male) is loading. Give it a second to dress.');
 }
-window.__jb={dress:jbDress,tick:jbaseTick,JB:JB,load:loadJesvinBase}; window.jbaseTick=jbaseTick; window.__jb.kun=function(){ loadBaseKun(); };
+window.__jb={dress:jbDress,tick:jbaseTick,JB:JB,load:loadJesvinBase}; window.jbaseTick=jbaseTick; window.__jb.kun=function(){ loadBaseKun(); }; window.__jb.stany=function(){ loadStany(); }; window.__jb.setView=function(v){ setView(v); }; window.__jb.rigPose=function(n,p){ rigPoseSet(n,p); };
 window.__jb.nodes=()=>nodes; window.__jb.cam=function(a,t){ orbit.target.set(t[0],t[1],t[2]); edit.position.set(a[0],a[1],a[2]); orbit.update(); };
 window.__jb.scNew=function(s,d){ SCU.detail=d||"high"; scNew(s); };
 window.__jb.rigSculpt=function(){ const id=S.sel, n=nodes.get(id); if(!n) return 'no sel'; const sp=n.userData.spec; sp.rig={rot:0}; const nn=rigRebuild(id); return Object.keys((nn.userData.rig||{}).bones||{}).length; };
