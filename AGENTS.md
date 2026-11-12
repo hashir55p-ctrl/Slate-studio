@@ -59,3 +59,6 @@ Slate Studio is a Blender-like 3D animation/sculpting app that runs in one web p
 - The original model meshes are hidden and copied into a carrier on a bone, rebuilt whenever `eqKey` changes (settings, bone identity, necklace settings). `equipStep(dt)` runs each frame next to `chStep`.
 - Necklace: a straight chain (longest axis) is bent along a path that hugs the body surface (`eqBodyPts`: skinned body vertices in chest-bone space; neck = lowest narrow height) and dips into a V; chain is scaled to fit the path length. Pendant hangs at the V point and swings (verlet pendulum; rests against the chest). Swing is not frame-deterministic.
 - Test hook: `window.__jb.kun()` loads the bare base male.
+
+## Build 150
+- Equipment: finish buttons (Keep original, Silver, Gold, Black, White; chain and pendant default to Silver) stored as `spec.eq.mat`. Missing normals (Nomad GLB export has none) are computed before bending/fitting, otherwise replacement materials render black. Nomad stores vertex colour as COLOR_0 (can be near black), so a finish override is usually wanted.
