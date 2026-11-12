@@ -62,3 +62,6 @@ Slate Studio is a Blender-like 3D animation/sculpting app that runs in one web p
 
 ## Build 150
 - Equipment: finish buttons (Keep original, Silver, Gold, Black, White; chain and pendant default to Silver) stored as `spec.eq.mat`. Missing normals (Nomad GLB export has none) are computed before bending/fitting, otherwise replacement materials render black. Nomad stores vertex colour as COLOR_0 (can be near black), so a finish override is usually wanted.
+
+## Build 151
+- Equipment now has its own right-hand tab ("Equip: chain, glasses, watch", pane `pEquip`) instead of a closed panel at the bottom of the Rig tab.

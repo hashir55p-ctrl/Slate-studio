@@ -244,7 +244,7 @@ details.pnl[open]>summary::before{border:4px solid transparent;border-top:6px so
       </div>
     </aside>
   </div>
-  <footer class="b-stat"><span id="stL">Build 150. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
+  <footer class="b-stat"><span id="stL">Build 151. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
 </div>
 <input type="file" id="glbIn" accept=".glb,.obj,.mtl" multiple hidden>
 <div id="popup" class="popup" hidden></div>
@@ -5738,9 +5738,11 @@ function equipOff(id){
   n.userData.eqCar=null; n.userData.eqPend=null; n.userData.eqKey=null; n.userData.eqSrc=null; delete n.userData.spec.eq; n.children.forEach(c=>{ c.visible=true; }); queueSave(); toast('Taken off.');
 }
 window.equipStep=equipStep; window.equipSet=equipSet; window.equipOff=equipOff; window.EQ_SLOTS=EQ_SLOTS;
-/* Rig tab: Equipment panel */
-(function(){ const _b=buildRigPane; buildRigPane=function(){ _b(); try{
-  const host=document.getElementById('pRig'); if(!host) return;
+/* Equip tab */
+IC.tEquip=svg('<path d="M4 6c0 7 2.5 10 6 10s6-3 6-10" '+stroke+'/><circle cx="10" cy="16.5" r="1.6" '+stroke+'/>');
+TABS.push({id:'equip',ic:IC.tEquip,t:'Equip: chain, glasses, watch',pane:'pEquip'});
+(function(){ const _b=buildFacePane; buildFacePane=function(){ _b(); try{
+  const host=document.createElement('div'); host.className='pane'; host.id='pEquip'; host.hidden=true; $('#pAi').parentNode.appendChild(host);
   const st=document.createElement('p'); st.className='note'; st.style.color='var(--fg)';
   const cur=()=>{ const n=S.sel&&nodes.get(S.sel); return n&&n.userData.spec&&n.userData.spec.type==='glb'?n:null; };
   const who=()=>{ const ch=eqChars(); const n=cur(); const e=n&&n.userData.spec.eq; if(e&&nodes.get(e.to)) return e.to; if(EQ.pick&&nodes.get(EQ.pick)) return EQ.pick; return ch[0]?ch[0].userData.spec.id:null; };
@@ -5752,7 +5754,7 @@ window.equipStep=equipStep; window.equipSet=equipSet; window.equipOff=equipOff; 
   const sl=(label,min,max,step,key,fmt)=>rangeField(label,min,max,step,()=>{ const n=cur(), e=n&&n.userData.spec.eq; return e&&e[key]!=null?e[key]:EQ_DEF[key]; },v=>{ const n=cur(), e=n&&n.userData.spec.eq; if(e){ e[key]=v; queueSave(); } },fmt||(v=>(+v).toFixed(2)));
   const common=[sl('Size',.3,3,.01,'sz'),sl('Left or right',-.12,.12,.001,'dx',v=>(+v).toFixed(3)),sl('Up or down',-.12,.12,.001,'dy',v=>(+v).toFixed(3)),sl('Forward or back',-.12,.12,.001,'dz',v=>(+v).toFixed(3)),sl('Tilt',-180,180,1,'rx',v=>Math.round(v)+'°'),sl('Turn',-180,180,1,'ry',v=>Math.round(v)+'°'),sl('Roll',-180,180,1,'rz',v=>Math.round(v)+'°')];
   const neck=[sl('Neck width',.6,1.6,.01,'nw'),sl('Chain drop (how low it hangs)',.3,3,.01,'dr'),sl('Away from the body',0,3,.01,'fw'),sl('Chain thickness',.3,4,.01,'th')];
-  host.append(panel('Equipment',[st,sw,g,noteEl('Finish (metal or colour):'),fg,off,noteEl('Import the chain and the cross as two models. Select the chain, tap Necklace; select the cross, tap Pendant. The chain is bent around the neck and the pendant swings with the body.')].concat(common,neck),false));
+  host.append(panel('Equipment',[st,sw,g,noteEl('Finish (metal or colour):'),fg,off,noteEl('Import the chain and the cross as two models. Select the chain, tap Necklace; select the cross, tap Pendant. The chain is bent around the neck and the pendant swings with the body.')].concat(common,neck),true));
   setInterval(()=>{ try{ const n=cur(), e=n&&n.userData.spec.eq, w=who(), wn=w&&nodes.get(w); sw.textContent='Character to equip: '+(wn?wn.userData.name:'none (rig a character first)');
     st.textContent=!n?'Select an imported model to equip it.':e?(n.userData.spec.name+' is equipped: '+EQ_SLOTS[e.slot].t+'.'):(n.userData.spec.name+' is not equipped. Pick where it goes.');
     common.concat(neck).forEach(f=>{ f.update&&f.update(); f.style.display=e?'':'none'; }); neck.forEach(f=>{ f.style.display=e&&(e.slot==='necklace')?'':'none'; }); }catch(x){} },300);
@@ -7115,7 +7117,7 @@ async function chatRun(d){
   if($('#selAspect').value!==String(S.aspect)) $('#selAspect').value='2.39';
   applyLook(); refreshLook(); applyQuality(); setView('free'); setMode('translate');
   applyTracks(0); renderTimeline(); renderOutliner(); renderProps(); showTab('render'); fit(); rebuildEnv();
-  $('#stL').textContent='Build 150 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
+  $('#stL').textContent='Build 151 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
   try{ if(location.hash==='#dev') window.__dev={S,nodes,scene,edit,cinema,orbit,renderer,THREE,get:id=>nodes.get(id),sc:{scRefine,scSetTopo,scAdj,scUpdate}}; }catch(e){}
   try{ loadEmbedded(); }catch(e){}
   try{ if(!saved&&!localStorage.getItem('slate-welcome-v1')){ localStorage.setItem('slate-welcome-v1','1'); setTimeout(showWelcome,500); } }catch(e){ if(!saved) setTimeout(showWelcome,500); }
