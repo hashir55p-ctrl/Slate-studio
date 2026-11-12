@@ -65,3 +65,6 @@ Slate Studio is a Blender-like 3D animation/sculpting app that runs in one web p
 
 ## Build 151
 - Equipment now has its own right-hand tab ("Equip: chain, glasses, watch", pane `pEquip`) instead of a closed panel at the bottom of the Rig tab.
+
+## Build 152
+- `eqDecimate` (equip.js): equipped meshes over ~90k vertices are simplified by vertex clustering (cached in `eqSrc[i].dec`), so a 430k-vertex Nomad chain rides on a character with ~85k vertices. Necklace path leaves a .16 rad clasp gap at the back. Tested with a real Nomad chain (22 MB) and cross.

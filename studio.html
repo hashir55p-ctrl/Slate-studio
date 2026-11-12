@@ -244,7 +244,7 @@ details.pnl[open]>summary::before{border:4px solid transparent;border-top:6px so
       </div>
     </aside>
   </div>
-  <footer class="b-stat"><span id="stL">Build 151. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
+  <footer class="b-stat"><span id="stL">Build 152. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
 </div>
 <input type="file" id="glbIn" accept=".glb,.obj,.mtl" multiple hidden>
 <div id="popup" class="popup" hidden></div>
@@ -5666,7 +5666,7 @@ function eqNeckShape(C,q){
 function eqBend(geo,C,q){
   const S=eqNeckShape(C,q), pos=geo.attributes.position, n=pos.count, bb=new THREE.Box3().setFromBufferAttribute(pos), sz=bb.getSize(new THREE.Vector3());
   const ax=sz.x>=sz.y&&sz.x>=sz.z?0:sz.y>=sz.z?1:2, a1=(ax+1)%3, a2=(ax+2)%3, cn=bb.getCenter(new THREE.Vector3()), CA=[cn.x,cn.y,cn.z], MN=[bb.min.x,bb.min.y,bb.min.z], Lc=[sz.x,sz.y,sz.z][ax]||1;
-  const M=640, th=[], cum=[0]; for(let i=0;i<=M;i++) th.push(-Math.PI+2*Math.PI*i/M);
+  const M=640, th=[], cum=[0]; const gap=.16; for(let i=0;i<=M;i++) th.push(-Math.PI+gap+(2*Math.PI-2*gap)*i/M); /* the two ends stop short of each other at the back, like a clasp */
   const P=th.map(S.pt); for(let i=1;i<=M;i++) cum.push(cum[i-1]+P[i].distanceTo(P[i-1])); const Lp=cum[M];
   /* uniform arc-length table of points and frames */
   const TP=[],TT=[],TN=[],TB=[]; let j=0;
@@ -5683,6 +5683,22 @@ function eqBend(geo,C,q){
   geo.setAttribute('position',new THREE.BufferAttribute(out,3)); geo.computeVertexNormals(); geo.computeBoundingSphere(); geo.computeBoundingBox();
   return {fit:fit};
 }
+/* heavy sculpt exports (hundreds of thousands of points) are simplified by vertex clustering before they ride on a character */
+function eqDecimate(g,target){
+  const P=g.attributes.position, n=P.count; if(n<=target) return g;
+  const bb=new THREE.Box3().setFromBufferAttribute(P), sz=bb.getSize(new THREE.Vector3()), mx=Math.max(sz.x,sz.y,sz.z)||1, idx=g.index?g.index.array:null, col=g.attributes.color||g.attributes.COLOR_0;
+  let cell=mx/4000, cid=new Int32Array(n), cnt;
+  for(let it=0;it<30;it++){ const m=new Map(); cnt=0; const A=Math.ceil(sz.x/cell)+2, B=Math.ceil(sz.y/cell)+2;
+    for(let i=0;i<n;i++){ const k=Math.floor((P.getX(i)-bb.min.x)/cell)+A*(Math.floor((P.getY(i)-bb.min.y)/cell)+B*Math.floor((P.getZ(i)-bb.min.z)/cell)); let c=m.get(k); if(c===undefined){ c=cnt++; m.set(k,c); } cid[i]=c; }
+    if(cnt<=target) break; cell*=Math.max(1.04,Math.sqrt(cnt/target)*1.01); }
+  const sum=new Float64Array(cnt*3), num=new Uint32Array(cnt), cs=col?new Float64Array(cnt*3):null;
+  for(let i=0;i<n;i++){ const c=cid[i]; sum[c*3]+=P.getX(i); sum[c*3+1]+=P.getY(i); sum[c*3+2]+=P.getZ(i); num[c]++; if(cs){ cs[c*3]+=col.getX(i); cs[c*3+1]+=col.getY(i); cs[c*3+2]+=col.getZ(i); } }
+  const pos=new Float32Array(cnt*3); for(let c=0;c<cnt;c++){ const k=num[c]||1; pos[c*3]=sum[c*3]/k; pos[c*3+1]=sum[c*3+1]/k; pos[c*3+2]=sum[c*3+2]/k; }
+  const tri=[], T=idx?idx.length:n; for(let t=0;t<T;t+=3){ const a=cid[idx?idx[t]:t], b=cid[idx?idx[t+1]:t+1], c=cid[idx?idx[t+2]:t+2]; if(a!==b&&b!==c&&a!==c) tri.push(a,b,c); }
+  const o=new THREE.BufferGeometry(); o.setAttribute('position',new THREE.BufferAttribute(pos,3)); o.setIndex(new THREE.BufferAttribute(cnt>65535?new Uint32Array(tri):new Uint16Array(tri),1));
+  if(cs){ const cc=new Float32Array(cnt*3); for(let c=0;c<cnt;c++){ const k=num[c]||1; cc[c*3]=cs[c*3]/k; cc[c*3+1]=cs[c*3+1]/k; cc[c*3+2]=cs[c*3+2]/k; } o.setAttribute('color',new THREE.BufferAttribute(cc,3)); }
+  o.computeVertexNormals(); return o;
+}
 function eqBuild(n){
   const sp=n.userData.spec, q=Object.assign({},EQ_DEF,sp.eq), C=nodes.get(q.to), R=C&&C.userData.rig; if(!R||!R.bones) return false;
   const slot=EQ_SLOTS[q.slot], bone=slot&&R.bones[slot.bone]; if(!bone) return false;
@@ -5691,7 +5707,7 @@ function eqBuild(n){
     if(!src.length) return false; n.userData.eqSrc=src; }
   n.children.forEach(c=>{ if(!c.userData.eqCar) c.visible=false; });
   if(n.userData.eqCar){ const old=n.userData.eqCar; if(old.parent) old.parent.remove(old); old.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); n.userData.eqCar=null; n.userData.eqPend=null; }
-  const H=R.H, geos=n.userData.eqSrc.map(s=>{ const g=s.g.clone(); if(!g.attributes.normal) g.computeVertexNormals(); g.applyMatrix4(s.M); return g; });
+  const H=R.H, geos=n.userData.eqSrc.map(s=>{ if(!s.dec) s.dec=eqDecimate(s.g,90000); const g=s.dec===s.g?s.g.clone():s.dec.clone(); if(!g.attributes.normal) g.computeVertexNormals(); g.applyMatrix4(s.M); return g; });
   const bb=new THREE.Box3(); geos.forEach(g=>{ g.computeBoundingBox(); bb.union(g.boundingBox); });
   const size=bb.getSize(new THREE.Vector3()), c=bb.getCenter(new THREE.Vector3()), car=new THREE.Group(); car.name='equip_'+q.slot; car.userData.eqCar=1;
   const fin=q.mat||((q.slot==='necklace'||q.slot==='pendant')?'silver':'keep'), F=EQ_FIN[fin], fm=F?new THREE.MeshStandardMaterial({color:F.c,metalness:F.m,roughness:F.r,emissive:F.c,emissiveIntensity:.1}):null;
@@ -7117,7 +7133,7 @@ async function chatRun(d){
   if($('#selAspect').value!==String(S.aspect)) $('#selAspect').value='2.39';
   applyLook(); refreshLook(); applyQuality(); setView('free'); setMode('translate');
   applyTracks(0); renderTimeline(); renderOutliner(); renderProps(); showTab('render'); fit(); rebuildEnv();
-  $('#stL').textContent='Build 151 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
+  $('#stL').textContent='Build 152 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
   try{ if(location.hash==='#dev') window.__dev={S,nodes,scene,edit,cinema,orbit,renderer,THREE,get:id=>nodes.get(id),sc:{scRefine,scSetTopo,scAdj,scUpdate}}; }catch(e){}
   try{ loadEmbedded(); }catch(e){}
   try{ if(!saved&&!localStorage.getItem('slate-welcome-v1')){ localStorage.setItem('slate-welcome-v1','1'); setTimeout(showWelcome,500); } }catch(e){ if(!saved) setTimeout(showWelcome,500); }
