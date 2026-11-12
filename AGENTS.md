@@ -68,3 +68,6 @@ Slate Studio is a Blender-like 3D animation/sculpting app that runs in one web p
 
 ## Build 152
 - `eqDecimate` (equip.js): equipped meshes over ~90k vertices are simplified by vertex clustering (cached in `eqSrc[i].dec`), so a 430k-vertex Nomad chain rides on a character with ~85k vertices. Necklace path leaves a .16 rad clasp gap at the back. Tested with a real Nomad chain (22 MB) and cross.
+
+## Build 153-154
+- Build 153: equipStep uses live world matrices (updateWorldMatrix) and test hooks `__hold/__step/__dtFix` (frame-stepped capture), `__jb.stany/setView/rigPose`. Build 154: default pendant height .032H (~5.6 cm on a 1.75 m character; was .06H, too big); Size slider min .2.

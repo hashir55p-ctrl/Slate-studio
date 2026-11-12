@@ -244,7 +244,7 @@ details.pnl[open]>summary::before{border:4px solid transparent;border-top:6px so
       </div>
     </aside>
   </div>
-  <footer class="b-stat"><span id="stL">Build 153. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
+  <footer class="b-stat"><span id="stL">Build 154. Select: tap an object. Orbit: drag. Pan and zoom: two fingers.</span><span id="stR"></span></footer>
 </div>
 <input type="file" id="glbIn" accept=".glb,.obj,.mtl" multiple hidden>
 <div id="popup" class="popup" hidden></div>
@@ -5717,7 +5717,7 @@ function eqBuild(n){
     let fit=1; geos.forEach(g=>{ fit=eqBend(g,C,q).fit; }); /* all parts share the chain axis only when the chain is one mesh; extra parts follow the same bend */
     sp.eq.fit=fit; geos.forEach((g,i)=>car.add(mk(g,n.userData.eqSrc[i].m)));
   } else if(q.slot==='pendant'){
-    const nq=eqNeckQ(C), S=eqNeckShape(C,nq), k=(.06*H*q.sz)/(size.y||1), M=new THREE.Matrix4(), E=new THREE.Euler(q.rx*DEG,q.ry*DEG,q.rz*DEG);
+    const nq=eqNeckQ(C), S=eqNeckShape(C,nq), k=(.032*H*q.sz)/(size.y||1), M=new THREE.Matrix4(), E=new THREE.Euler(q.rx*DEG,q.ry*DEG,q.rz*DEG);
     M.makeRotationFromEuler(E).multiply(new THREE.Matrix4().makeScale(k,k,k)).multiply(new THREE.Matrix4().makeTranslation(-c.x,-bb.max.y,-c.z));
     const pend=new THREE.Group(); pend.position.set(0,0,0); geos.forEach((g,i)=>{ g.applyMatrix4(M); pend.add(mk(g,n.userData.eqSrc[i].m)); });
     pend.position.set(q.dx*H,q.dy*H,(q.dz+.004)*H); car.add(pend); car.position.copy(S.low); n.userData.eqPend={L:size.y*k*.5,st:null};
@@ -5769,7 +5769,7 @@ TABS.push({id:'equip',ic:IC.tEquip,t:'Equip: chain, glasses, watch',pane:'pEquip
   const fg=document.createElement('div'); fg.className='g2'; [['Keep original colour','keep'],['Silver','silver'],['Gold','gold'],['Black','black'],['White','white']].forEach(f=>fg.appendChild(scBtn(f[0],()=>{ const n=cur(), e=n&&n.userData.spec.eq; if(e){ e.mat=f[1]; queueSave(); } else toast('Equip the model first.'); })));
   const off=scBtn('Take off',()=>{ const n=cur(); if(n) equipOff(n.userData.spec.id); });
   const sl=(label,min,max,step,key,fmt)=>rangeField(label,min,max,step,()=>{ const n=cur(), e=n&&n.userData.spec.eq; return e&&e[key]!=null?e[key]:EQ_DEF[key]; },v=>{ const n=cur(), e=n&&n.userData.spec.eq; if(e){ e[key]=v; queueSave(); } },fmt||(v=>(+v).toFixed(2)));
-  const common=[sl('Size',.3,3,.01,'sz'),sl('Left or right',-.12,.12,.001,'dx',v=>(+v).toFixed(3)),sl('Up or down',-.12,.12,.001,'dy',v=>(+v).toFixed(3)),sl('Forward or back',-.12,.12,.001,'dz',v=>(+v).toFixed(3)),sl('Tilt',-180,180,1,'rx',v=>Math.round(v)+'°'),sl('Turn',-180,180,1,'ry',v=>Math.round(v)+'°'),sl('Roll',-180,180,1,'rz',v=>Math.round(v)+'°')];
+  const common=[sl("Size",.2,3,.01,"sz"),sl('Left or right',-.12,.12,.001,'dx',v=>(+v).toFixed(3)),sl('Up or down',-.12,.12,.001,'dy',v=>(+v).toFixed(3)),sl('Forward or back',-.12,.12,.001,'dz',v=>(+v).toFixed(3)),sl('Tilt',-180,180,1,'rx',v=>Math.round(v)+'°'),sl('Turn',-180,180,1,'ry',v=>Math.round(v)+'°'),sl('Roll',-180,180,1,'rz',v=>Math.round(v)+'°')];
   const neck=[sl('Neck width',.6,1.6,.01,'nw'),sl('Chain drop (how low it hangs)',.3,3,.01,'dr'),sl('Away from the body',0,3,.01,'fw'),sl('Chain thickness',.3,4,.01,'th')];
   host.append(panel('Equipment',[st,sw,g,noteEl('Finish (metal or colour):'),fg,off,noteEl('Import the chain and the cross as two models. Select the chain, tap Necklace; select the cross, tap Pendant. The chain is bent around the neck and the pendant swings with the body.')].concat(common,neck),true));
   setInterval(()=>{ try{ const n=cur(), e=n&&n.userData.spec.eq, w=who(), wn=w&&nodes.get(w); sw.textContent='Character to equip: '+(wn?wn.userData.name:'none (rig a character first)');
@@ -7134,7 +7134,7 @@ async function chatRun(d){
   if($('#selAspect').value!==String(S.aspect)) $('#selAspect').value='2.39';
   applyLook(); refreshLook(); applyQuality(); setView('free'); setMode('translate');
   applyTracks(0); renderTimeline(); renderOutliner(); renderProps(); showTab('render'); fit(); rebuildEnv();
-  $('#stL').textContent='Build 153 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
+  $('#stL').textContent='Build 154 \u00b7 '+(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+(half?' \u00b7 HDR':'')+' \u00b7 Select: tap an object. Orbit: drag. Pan and zoom: two fingers.';
   try{ if(location.hash==='#dev') window.__dev={S,nodes,scene,edit,cinema,orbit,renderer,THREE,get:id=>nodes.get(id),sc:{scRefine,scSetTopo,scAdj,scUpdate}}; }catch(e){}
   try{ loadEmbedded(); }catch(e){}
   try{ if(!saved&&!localStorage.getItem('slate-welcome-v1')){ localStorage.setItem('slate-welcome-v1','1'); setTimeout(showWelcome,500); } }catch(e){ if(!saved) setTimeout(showWelcome,500); }
